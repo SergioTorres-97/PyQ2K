@@ -35,21 +35,11 @@ header_dict = {
 # ============================================================================
 # PARÁMETROS A CALIBRAR (FUERA DE __main__)
 # ============================================================================
-# Formato: 'parametro': (min, max, global)
-# global = True  → Un solo valor para todos los reaches
-# global = False → Un valor diferente por cada reach
-
 parametros = {
-    'kaaa': (0.1, 2, False),  # Tasa de aireación
-    'kn': (0.0005, 0.05, False),  # Nitrificación
-    'kdc': (0.05, 1.5, False),  # Descomposición carbono rápido
-    # Agrega más parámetros aquí si necesitas:
-    # 'khc': (0.001, 0.5, True),
-    # 'kdcs': (0.001, 0.3, False),  # Este sería POR TRAMO
-    # 'khn': (0.001, 0.5, True),
-    # 'ki': (0.001, 0.5, True),
-    # 'khp': (0.001, 0.5, True),
-    # 'kdt': (0.001, 0.3, True),
+    'kaaa': (0.1, 3, False),
+    'kn': (0.0005, 0.05, False),
+    'kdc': (0.05, 1.5, False),
+    'kdt': (0.05, 2.5, False),
 }
 
 
@@ -57,9 +47,6 @@ parametros = {
 # FUNCIONES AUXILIARES (FUERA DE __main__)
 # ============================================================================
 def decodificar_solucion(solution, param_map_arg, n_reaches):
-    """
-    Convierte el array de solución en diccionario de listas de parámetros
-    """
     params = {
         'kaaa': [None] * n_reaches,
         'khc': [None] * n_reaches,
@@ -75,54 +62,40 @@ def decodificar_solucion(solution, param_map_arg, n_reaches):
     for gene_idx, (param_name, reach_idx) in enumerate(param_map_arg):
         valor = solution[gene_idx]
         if reach_idx is None:
-            # Global: asignar a todos los reaches
             params[param_name] = [valor] * n_reaches
         else:
-            # Por tramo: asignar solo al reach específico
             params[param_name][reach_idx] = valor
 
     return params
 
 
 def evaluar_una_solucion(args):
-    """
-    Función worker que evalúa una solución en un proceso separado.
-    Crea su propio directorio temporal para evitar conflictos con Fortran.
-    """
     solution, eval_id, filepath_original, header_dict_original, param_map_arg, n_reaches = args
 
-    # Crear directorio temporal único para esta evaluación
     temp_dir = tempfile.mkdtemp(prefix=f'q2k_eval_{eval_id}_')
 
     try:
-        # Copiar archivos necesarios al directorio temporal
         plantilla_origen = os.path.join(filepath_original, 'PlantillaBaseQ2K.xlsx')
         plantilla_destino = os.path.join(temp_dir, 'PlantillaBaseQ2K.xlsx')
         shutil.copy2(plantilla_origen, plantilla_destino)
 
-        # Copiar otros archivos necesarios (ajusta según tus archivos)
         for archivo in glob.glob(os.path.join(filepath_original, '*')):
             if os.path.isfile(archivo):
                 nombre = os.path.basename(archivo)
-                # No copiar archivos temporales
                 if not any(nombre.endswith(ext) for ext in ['.out', '.txt', '.dat', '.q2k']):
                     try:
                         shutil.copy2(archivo, os.path.join(temp_dir, nombre))
                     except:
                         pass
 
-        # Crear header_dict con el directorio temporal
         header_dict_temp = header_dict_original.copy()
         header_dict_temp['filedir'] = temp_dir
 
-        # Crear modelo
         model = Q2KModel(temp_dir, header_dict_temp)
         model.cargar_plantillas(plantilla_destino)
 
-        # Decodificar solución
         params = decodificar_solucion(solution, param_map_arg, n_reaches)
 
-        # Generar configuración
         reach_rates_custom = model.config.generar_reach_rates_custom(
             n=n_reaches,
             kaaa_list=params['kaaa'],
@@ -136,7 +109,6 @@ def evaluar_una_solucion(args):
             kdt_list=params['kdt']
         )
 
-        # Ejecutar modelo
         model.configurar_modelo(reach_rates_custom=reach_rates_custom, q_cabecera=1.06007E-06)
         model.generar_archivo_q2k()
         model.ejecutar_simulacion()
@@ -150,7 +122,6 @@ def evaluar_una_solucion(args):
         return (eval_id, -999)
 
     finally:
-        # Limpiar directorio temporal
         try:
             shutil.rmtree(temp_dir)
         except:
@@ -161,33 +132,25 @@ def evaluar_una_solucion(args):
 # PROGRAMA PRINCIPAL
 # ============================================================================
 if __name__ == '__main__':
-    # CRÍTICO: Necesario en Windows para multiprocessing
     mp.freeze_support()
 
-    # ========================================================================
-    # INICIALIZACIÓN
-    # ========================================================================
     print('\n' + '=' * 60)
     print('CALIBRACIÓN AUTOMÁTICA DE QUAL2K CON ALGORITMO GENÉTICO')
     print('=' * 60)
 
-    # Obtener número de reaches
     model_temp = Q2KModel(filepath, header_dict)
     model_temp.cargar_plantillas(filepath + '\\PlantillaBaseQ2K.xlsx')
     n = len(model_temp.data_reaches)
     print(f'\nNúmero de reaches: {n}')
 
-    # Configuración de paralelización
-    NUM_WORKERS = min(4, mp.cpu_count() - 1)  # Ajusta según tus CPUs
-    USAR_PARALELO = True  # Cambiar a False para debug en modo serial
+    NUM_WORKERS = min(4, mp.cpu_count() - 1)
+    USAR_PARALELO = True
 
     print(f'Modo: {"PARALELO" if USAR_PARALELO else "SERIAL"}')
     if USAR_PARALELO:
         print(f'Workers: {NUM_WORKERS}')
 
-    # ========================================================================
-    # CREAR GENE_SPACE Y MAPEO DE PARÁMETROS
-    # ========================================================================
+    # Crear gene_space y mapeo
     gene_space = []
     param_map = []
 
@@ -211,44 +174,30 @@ if __name__ == '__main__':
     print(f'\nTotal de genes a calibrar: {num_genes}')
     print("=" * 60)
 
-    # ========================================================================
-    # CONFIGURAR POOL DE WORKERS
-    # ========================================================================
+    # Pool de workers
     pool = None
     if USAR_PARALELO:
         pool = mp.Pool(processes=NUM_WORKERS)
         print(f'\nPool de {NUM_WORKERS} workers creado')
 
-    # ========================================================================
-    # CONTADORES Y TRACKING
-    # ========================================================================
+    # Contadores
     contador = {'value': 0}
     mejor_kge = {'value': -999.0}
 
 
-    # ========================================================================
-    # FUNCIÓN FITNESS
-    # ========================================================================
+    # Función fitness
     def fitness_function(ga, solution, solution_idx):
-        """
-        Función que PyGAD llama para evaluar cada individuo.
-        Usa el pool de workers si está en modo paralelo.
-        """
         contador['value'] += 1
         eval_id = contador['value']
 
-        if USAR_PARALELO:
-            # Preparar argumentos para el worker
+        if USAR_PARALELO and pool is not None:
             args = (solution, eval_id, filepath, header_dict, param_map, n)
-            # Evaluar usando el pool (reutiliza workers)
             resultado = pool.apply_async(evaluar_una_solucion, (args,))
-            eval_id_result, kge = resultado.get(timeout=300)  # timeout 5 min
+            eval_id_result, kge = resultado.get(timeout=300)
         else:
-            # Evaluar directamente en modo serial (útil para debug)
             args = (solution, eval_id, filepath, header_dict, param_map, n)
             eval_id_result, kge = evaluar_una_solucion(args)
 
-        # Actualizar mejor KGE
         if kge > mejor_kge['value']:
             mejor_kge['value'] = kge
             print(f"  *** Eval {eval_id} | NUEVO MEJOR KGE: {kge:.4f} ***")
@@ -258,13 +207,8 @@ if __name__ == '__main__':
         return kge
 
 
-    # ========================================================================
-    # CALLBACK POR GENERACIÓN
-    # ========================================================================
+    # Callback
     def on_generation(ga):
-        """
-        Se ejecuta al finalizar cada generación
-        """
         gen = ga.generations_completed
         best_solution, best_fitness, _ = ga.best_solution()
         print(f'\n{"=" * 60}')
@@ -274,9 +218,7 @@ if __name__ == '__main__':
         print("=" * 60 + '\n')
 
 
-    # ========================================================================
-    # CONFIGURAR ALGORITMO GENÉTICO
-    # ========================================================================
+    # Configurar GA
     print('\n' + '=' * 60)
     print('CONFIGURACIÓN DEL ALGORITMO GENÉTICO')
     print('=' * 60)
@@ -298,29 +240,22 @@ if __name__ == '__main__':
         num_genes=num_genes,
         gene_space=gene_space,
 
-        # Selección
         parent_selection_type="tournament",
         K_tournament=3,
 
-        # Cruce
         crossover_type="single_point",
         crossover_probability=0.8,
 
-        # Mutación
         mutation_type="random",
         mutation_probability=0.2,
         mutation_percent_genes=20,
 
-        # Elitismo
         keep_elitism=1,
 
-        # Callback
         on_generation=on_generation,
     )
 
-    # ========================================================================
-    # EJECUTAR CALIBRACIÓN
-    # ========================================================================
+    # Ejecutar calibración
     print(f'\n{"=" * 60}')
     print('INICIANDO CALIBRACIÓN')
     print('=' * 60 + '\n')
@@ -328,109 +263,111 @@ if __name__ == '__main__':
     try:
         ga_instance.run()
 
-    except KeyboardInterrupt:
-        print('\n\n¡CALIBRACIÓN INTERRUMPIDA POR USUARIO!\n')
+        # ====================================================================
+        # OBTENER MEJOR SOLUCIÓN (ANTES DE CERRAR EL POOL)
+        # ====================================================================
+        print('\n' + '=' * 60)
+        print('CALIBRACIÓN COMPLETADA')
+        print('=' * 60)
 
-    finally:
-        # Cerrar pool de workers
-        if USAR_PARALELO and pool is not None:
-            print('\nCerrando pool de workers...')
-            pool.close()
-            pool.join()
+        solution, solution_fitness, solution_idx = ga_instance.best_solution()
 
-    # ========================================================================
-    # MOSTRAR RESULTADOS
-    # ========================================================================
-    print('\n' + '=' * 60)
-    print('CALIBRACIÓN COMPLETADA')
-    print('=' * 60)
+        print(f'\nMejor KGE encontrado: {solution_fitness:.4f}')
+        print(f'Total de evaluaciones: {contador["value"]}')
 
-    solution, solution_fitness, solution_idx = ga_instance.best_solution()
-
-    print(f'\nMejor KGE encontrado: {solution_fitness:.4f}')
-    print(f'Total de evaluaciones: {contador["value"]}')
-
-    print(f'\n{"=" * 60}')
-    print('PARÁMETROS ÓPTIMOS')
-    print('=' * 60)
-
-    gene_idx = 0
-    for param_name, (min_val, max_val, is_global) in parametros.items():
-        if is_global:
-            valor = solution[gene_idx]
-            print(f'{param_name:8s} (global):  {valor:.6f}')
-            gene_idx += 1
-        else:
-            print(f'{param_name:8s} (por tramo):')
-            for i in range(n):
-                valor = solution[gene_idx]
-                print(f'  Reach {i + 1}: {valor:.6f}')
-                gene_idx += 1
-
-    print('=' * 60)
-
-    # ========================================================================
-    # SIMULACIÓN FINAL CON PARÁMETROS ÓPTIMOS
-    # ========================================================================
-    print('\n' + '=' * 60)
-    print('SIMULACIÓN FINAL CON PARÁMETROS ÓPTIMOS')
-    print('=' * 60)
-
-    model_final = Q2KModel(filepath, header_dict)
-    model_final.cargar_plantillas(filepath + '\\PlantillaBaseQ2K.xlsx')
-
-    params_final = decodificar_solucion(solution, param_map, n)
-
-    reach_rates_final = model_final.config.generar_reach_rates_custom(
-        n=n,
-        kaaa_list=params_final['kaaa'],
-        khc_list=params_final['khc'],
-        kdcs_list=params_final['kdcs'],
-        kdc_list=params_final['kdc'],
-        khn_list=params_final['khn'],
-        kn_list=params_final['kn'],
-        ki_list=params_final['ki'],
-        khp_list=params_final['khp'],
-        kdt_list=params_final['kdt']
-    )
-
-    model_final.configurar_modelo(reach_rates_custom=reach_rates_final, q_cabecera=1.06007E-06)
-    model_final.generar_archivo_q2k()
-    model_final.ejecutar_simulacion()
-    model_final.analizar_resultados(generar_graficas=False)
-    resultados_final, kge_final = model_final.calcular_metricas_calibracion()
-
-    print(f'\nKGE final verificado: {kge_final:.4f}')
-
-    # ========================================================================
-    # GUARDAR RESULTADOS
-    # ========================================================================
-    output_file = os.path.join(filepath, 'parametros_calibrados.txt')
-    with open(output_file, 'w', encoding='utf-8') as f:
-        f.write('=' * 60 + '\n')
-        f.write('RESULTADOS DE CALIBRACIÓN - ALGORITMO GENÉTICO\n')
-        f.write('=' * 60 + '\n\n')
-        f.write(f'KGE Final: {kge_final:.6f}\n')
-        f.write(f'Total de evaluaciones: {contador["value"]}\n')
-        f.write(f'Generaciones: {NUM_GENERATIONS}\n')
-        f.write(f'Tamaño de población: {POPULATION_SIZE}\n\n')
-        f.write('PARÁMETROS ÓPTIMOS:\n')
-        f.write('-' * 60 + '\n')
+        print(f'\n{"=" * 60}')
+        print('PARÁMETROS ÓPTIMOS')
+        print('=' * 60)
 
         gene_idx = 0
         for param_name, (min_val, max_val, is_global) in parametros.items():
             if is_global:
                 valor = solution[gene_idx]
-                f.write(f'{param_name:8s} (global):  {valor:.6f}\n')
+                print(f'{param_name:8s} (global):  {valor:.6f}')
                 gene_idx += 1
             else:
-                f.write(f'{param_name:8s} (por tramo):\n')
+                print(f'{param_name:8s} (por tramo):')
                 for i in range(n):
                     valor = solution[gene_idx]
-                    f.write(f'  Reach {i + 1}: {valor:.6f}\n')
+                    print(f'  Reach {i + 1}: {valor:.6f}')
                     gene_idx += 1
 
-    print(f'\nResultados guardados en: {output_file}')
+        print('=' * 60)
+
+    except KeyboardInterrupt:
+        print('\n\n¡CALIBRACIÓN INTERRUMPIDA POR USUARIO!\n')
+        solution = None
+
+    finally:
+        # CERRAR POOL AL FINAL
+        if USAR_PARALELO and pool is not None:
+            print('\nCerrando pool de workers...')
+            pool.close()
+            pool.join()
+            print('Pool cerrado correctamente')
+
+    # ========================================================================
+    # SIMULACIÓN FINAL (SOLO SI TENEMOS SOLUCIÓN)
+    # ========================================================================
+    if solution is not None:
+        print('\n' + '=' * 60)
+        print('SIMULACIÓN FINAL CON PARÁMETROS ÓPTIMOS')
+        print('=' * 60)
+
+        model_final = Q2KModel(filepath, header_dict)
+        model_final.cargar_plantillas(filepath + '\\PlantillaBaseQ2K.xlsx')
+
+        params_final = decodificar_solucion(solution, param_map, n)
+
+        reach_rates_final = model_final.config.generar_reach_rates_custom(
+            n=n,
+            kaaa_list=params_final['kaaa'],
+            khc_list=params_final['khc'],
+            kdcs_list=params_final['kdcs'],
+            kdc_list=params_final['kdc'],
+            khn_list=params_final['khn'],
+            kn_list=params_final['kn'],
+            ki_list=params_final['ki'],
+            khp_list=params_final['khp'],
+            kdt_list=params_final['kdt']
+        )
+
+        model_final.configurar_modelo(reach_rates_custom=reach_rates_final, q_cabecera=1.06007E-06)
+        model_final.generar_archivo_q2k()
+        model_final.ejecutar_simulacion()
+        model_final.analizar_resultados(generar_graficas=False)
+        resultados_final, kge_final = model_final.calcular_metricas_calibracion()
+
+        print(f'\nKGE final verificado: {kge_final:.4f}')
+
+        # Guardar resultados
+        output_file = os.path.join(filepath, 'parametros_calibrados.txt')
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write('=' * 60 + '\n')
+            f.write('RESULTADOS DE CALIBRACIÓN - ALGORITMO GENÉTICO\n')
+            f.write('=' * 60 + '\n\n')
+            f.write(f'KGE Final: {kge_final:.6f}\n')
+            f.write(f'Total de evaluaciones: {contador["value"]}\n')
+            f.write(f'Generaciones: {NUM_GENERATIONS}\n')
+            f.write(f'Tamaño de población: {POPULATION_SIZE}\n\n')
+            f.write('PARÁMETROS ÓPTIMOS:\n')
+            f.write('-' * 60 + '\n')
+
+            gene_idx = 0
+            for param_name, (min_val, max_val, is_global) in parametros.items():
+                if is_global:
+                    valor = solution[gene_idx]
+                    f.write(f'{param_name:8s} (global):  {valor:.6f}\n')
+                    gene_idx += 1
+                else:
+                    f.write(f'{param_name:8s} (por tramo):\n')
+                    for i in range(n):
+                        valor = solution[gene_idx]
+                        f.write(f'  Reach {i + 1}: {valor:.6f}\n')
+                        gene_idx += 1
+
+        print(f'\nResultados guardados en: {output_file}')
+
     print('\n' + '=' * 60)
     print('PROCESO FINALIZADO')
     print('=' * 60 + '\n')

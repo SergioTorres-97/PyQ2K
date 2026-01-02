@@ -24,8 +24,6 @@ header_dict = {
     "IMethpH": "Brent"
 }
 
-
-
 model = Q2KModel(filepath, header_dict)
 model.cargar_plantillas(filepath + '\\PlantillaBaseQ2K.xlsx')
 

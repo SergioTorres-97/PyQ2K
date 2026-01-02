@@ -45,7 +45,7 @@ reach_rates_custom = model.config.generar_reach_rates_custom(
 model.configurar_modelo(reach_rates_custom=reach_rates_custom, q_cabecera= 1.06007E-06)
 model.generar_archivo_q2k()
 model.ejecutar_simulacion()
-model.analizar_resultados()
+model.analizar_resultados(generar_graficas=False)
 resultados, kge_global = model.calcular_metricas_calibracion()
 
 print(f'Kge: {kge_global}')

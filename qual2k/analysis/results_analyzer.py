@@ -202,7 +202,9 @@ class Q2KResultsAnalyzer:
 
         # Merge final
         merged = pd.merge_asof(wq, temps, on='Distancia Longitudinal (km)', direction='nearest')
+        merged = merged.drop_duplicates(subset='Distancia Longitudinal (km)', keep='first')
         merged = pd.merge_asof(merged, hyd, on='Distancia Longitudinal (km)', direction='nearest')
+        merged = merged.drop_duplicates(subset='Distancia Longitudinal (km)', keep='first')
 
         return merged.sort_values('Distancia Longitudinal (km)', ascending=False).reset_index(drop=True)
 
@@ -250,20 +252,66 @@ class Q2KResultsAnalyzer:
     def combinar_modelados_observados(wq_model: pd.DataFrame,
                                       data_obs: pd.DataFrame) -> pd.DataFrame:
         """
-        Combina datos modelados y observados.
+        Combina datos modelados y observados con emparejamiento 1-a-1.
+        Cada observación se empareja con su valor modelado más cercano una sola vez.
 
         Args:
             wq_model: DataFrame con datos modelados
             data_obs: DataFrame con datos observados
 
         Returns:
-            DataFrame combinado
+            DataFrame combinado con todas las filas del modelo
         """
-        wq_model = wq_model.sort_values('Distancia Longitudinal (km)')
-        data_obs = data_obs.sort_values('Distancia Longitudinal (km)')
-        return pd.merge_asof(wq_model, data_obs,
-                             on='Distancia Longitudinal (km)',
-                             direction='nearest')
+        wq_model = wq_model.sort_values('Distancia Longitudinal (km)').reset_index(drop=True)
+        data_obs = data_obs.sort_values('Distancia Longitudinal (km)').reset_index(drop=True)
+
+        # Guardar copia del modelo para no modificarlo
+        modelo_temp = wq_model.copy()
+
+        # Lista para guardar los matches
+        matches = []
+
+        # Para cada observación, encontrar su modelo más cercano
+        for idx_obs, row_obs in data_obs.iterrows():
+            dist_obs = row_obs['Distancia Longitudinal (km)']
+
+            # Calcular distancias absolutas con los modelos restantes
+            distances = np.abs(modelo_temp['Distancia Longitudinal (km)'] - dist_obs)
+
+            # Encontrar el índice del más cercano
+            closest_idx = distances.idxmin()
+
+            # Guardar el match
+            match_info = {
+                'idx_modelo': closest_idx,
+                'dist_modelo': modelo_temp.loc[closest_idx, 'Distancia Longitudinal (km)']
+            }
+
+            # Agregar todas las columnas observadas
+            for col in data_obs.columns:
+                if col != 'Distancia Longitudinal (km)':
+                    match_info[col] = row_obs[col]
+
+            matches.append(match_info)
+
+            # Remover este índice para que no se vuelva a usar
+            modelo_temp = modelo_temp.drop(closest_idx)
+
+        # Crear DataFrame con los matches
+        df_matches = pd.DataFrame(matches)
+
+        # Merge con el modelo completo (left join para mantener todas las filas)
+        df_merge = wq_model.merge(
+            df_matches,
+            left_on='Distancia Longitudinal (km)',
+            right_on='dist_modelo',
+            how='left'
+        )
+
+        # Limpiar columnas auxiliares
+        df_merge = df_merge.drop(['idx_modelo', 'dist_modelo'], axis=1, errors='ignore')
+
+        return df_merge
 
     @staticmethod
     def calcular_kge_global(dataExp: pd.DataFrame,
@@ -280,6 +328,8 @@ class Q2KResultsAnalyzer:
         Returns:
             Tuple con (resultados_por_variable, kge_global)
         """
+
+        dataExp = dataExp.dropna()
         resultados = {}
         for sim_col, obs_col in pares:
             kge_val = metricas.kge(dataExp[obs_col], dataExp[sim_col])

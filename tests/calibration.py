@@ -223,9 +223,9 @@ if __name__ == '__main__':
     print('CONFIGURACIÓN DEL ALGORITMO GENÉTICO')
     print('=' * 60)
 
-    NUM_GENERATIONS = 30
-    POPULATION_SIZE = 12
-    NUM_PARENTS_MATING = 4
+    NUM_GENERATIONS = 100
+    POPULATION_SIZE = 40
+    NUM_PARENTS_MATING = 16
 
     print(f'Generaciones: {NUM_GENERATIONS}')
     print(f'Tamaño de población: {POPULATION_SIZE}')
@@ -244,13 +244,13 @@ if __name__ == '__main__':
         K_tournament=3,
 
         crossover_type="single_point",
-        crossover_probability=0.8,
+        crossover_probability=0.9,
 
         mutation_type="random",
         mutation_probability=0.2,
         mutation_percent_genes=20,
 
-        keep_elitism=1,
+        keep_elitism=3,
 
         on_generation=on_generation,
     )
@@ -335,7 +335,7 @@ if __name__ == '__main__':
         model_final.configurar_modelo(reach_rates_custom=reach_rates_final, q_cabecera=1.06007E-06)
         model_final.generar_archivo_q2k()
         model_final.ejecutar_simulacion()
-        model_final.analizar_resultados(generar_graficas=False)
+        model_final.analizar_resultados(generar_graficas=True)
         resultados_final, kge_final = model_final.calcular_metricas_calibracion()
 
         print(f'\nKGE final verificado: {kge_final:.4f}')

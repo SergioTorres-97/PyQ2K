@@ -31,37 +31,36 @@ parametros = {
     'kn': (0.0005, 0.05, False),
     'kdc': (0.05, 1.5, False),
     'kdt': (0.05, 2.5, False),
+    'khp': (0.05, 2.5, False),
+
 }
 
-# ========================================================================
-# OPCIÓN 1: Configuración manual completa
-# ========================================================================
+# Crear instancia de calibración
 calibracion = Calibracion(
-    filepath=filepath,
-    header_dict=header_dict,
-    parametros=parametros,
-    # Básicos
-    num_generations=200,
-    population_size=80,
-    num_parents_mating=32,
-    # Selección
-    parent_selection_type="tournament",
-    k_tournament=3,
-    # Cruce
-    crossover_type="single_point",
-    crossover_probability=0.9,
-    # Mutación
-    mutation_type="random",
-    mutation_probability=0.15,
-    mutation_percent_genes=20,
-    # Elitismo
-    keep_elitism=5,
-    # Reproducibilidad
-    random_seed=42,
-    # Paralelismo
-    num_workers=4,
-    usar_paralelo=True
-)
+        filepath=filepath,
+        header_dict=header_dict,
+        parametros=parametros,
+        # Básicos
+        num_generations=100,
+        population_size=40,
+        num_parents_mating=16,
+        # Selección
+        parent_selection_type="tournament",
+        k_tournament=3,
+        # Cruce
+        crossover_type="single_point",
+        crossover_probability=0.9,
+        # Mutación
+        mutation_type="random",
+        mutation_probability=0.2,
+        mutation_percent_genes=20,
+        # Elitismo
+        keep_elitism=3,
+        # Reproducibilidad
+        random_seed=42,
+        # Paralelismo
+        num_workers=4,
+        usar_paralelo=True)
 
 # ========================================================================
 # OPCIÓN 2: Usar preset
@@ -91,17 +90,30 @@ calibracion = Calibracion(
 #     random_seed=42
 # )
 
-# Exportar configuración antes de ejecutar
+# Exportar configuración
 calibracion.exportar_configuracion()
 
-# Ejecutar calibración
-resultado = calibracion.ejecutar()
+# Ejecutar calibración (con gráficas automáticas)
+resultado = calibracion.ejecutar(generar_graficas=True)
 
-# Obtener parámetros calibrados y historial
+# También puedes generar gráficas manualmente después
 if resultado is not None:
-    solucion, kge = resultado
-    params_dict = calibracion.get_parametros_calibrados()
-    historial = calibracion.get_historial()
+    # Gráfica completa en alta resolución
+    calibracion.plotear_evolucion_fitness(
+        filename='analisis_completo.png',
+        dpi=300,
+        formato='png'
+    )
 
-    print(f"\nParámetros calibrados disponibles: {params_dict.keys()}")
-    print(f"Total de generaciones: {len(historial)}")
+    # Gráfica simple para presentación
+    calibracion.plotear_fitness_simple(
+        filename='presentacion.png',
+        dpi=150
+    )
+
+    # Versión PDF para publicación
+    calibracion.plotear_evolucion_fitness(
+        filename='publicacion.pdf',
+        dpi=500,
+        formato='pdf'
+    )

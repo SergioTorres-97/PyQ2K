@@ -8,8 +8,24 @@ import shutil
 import tempfile
 import multiprocessing as mp
 from typing import Dict, List, Tuple, Optional, Any, Union
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+from matplotlib.gridspec import GridSpec
+import pandas as pd
 
 warnings.filterwarnings('ignore')
+
+# Configuración de estilo para publicación
+plt.rcParams['font.family'] = 'serif'
+plt.rcParams['font.serif'] = ['Times New Roman', 'DejaVu Serif']
+plt.rcParams['font.size'] = 10
+plt.rcParams['axes.labelsize'] = 11
+plt.rcParams['axes.titlesize'] = 12
+plt.rcParams['xtick.labelsize'] = 9
+plt.rcParams['ytick.labelsize'] = 9
+plt.rcParams['legend.fontsize'] = 9
+plt.rcParams['figure.titlesize'] = 13
 
 
 class Calibracion:
@@ -158,6 +174,7 @@ class Calibracion:
         self.ga_instance = None
         self.mejor_solucion = None
         self.historial_generaciones = []
+        self.historial_poblacion = []  # Nuevo: guardar estadísticas de cada generación
 
     def _inicializar_modelo(self) -> Q2KModel:
         """Crea una instancia temporal del modelo para obtener configuración."""
@@ -321,20 +338,332 @@ class Calibracion:
     def _on_generation(self, ga):
         """Callback ejecutado al completar cada generación."""
         gen = ga.generations_completed
+
+        # Obtener estadísticas de la población actual
+        population_fitness = ga.last_generation_fitness
         best_solution, best_fitness, _ = ga.best_solution()
 
-        # Guardar historial
-        self.historial_generaciones.append({
+        # Calcular estadísticas
+        stats = {
             'generacion': gen,
             'mejor_fitness': best_fitness,
-            'mejor_global': self.mejor_kge
-        })
+            'mejor_global': self.mejor_kge,
+            'promedio': np.mean(population_fitness),
+            'mediana': np.median(population_fitness),
+            'std': np.std(population_fitness),
+            'min': np.min(population_fitness),
+            'max': np.max(population_fitness),
+            'q25': np.percentile(population_fitness, 25),
+            'q75': np.percentile(population_fitness, 75),
+        }
+
+        # Guardar historial
+        self.historial_generaciones.append(stats)
+        self.historial_poblacion.append(population_fitness.copy())
 
         print(f'\n{"=" * 60}')
         print(f'GENERACIÓN {gen} COMPLETADA')
         print(f'Mejor KGE de esta generación: {best_fitness:.4f}')
+        print(f'Promedio poblacional: {stats["promedio"]:.4f} ± {stats["std"]:.4f}')
         print(f'Mejor KGE global: {self.mejor_kge:.4f}')
         print("=" * 60 + '\n')
+
+    def plotear_evolucion_fitness(
+            self,
+            filename: str = 'evolucion_fitness.png',
+            dpi: int = 300,
+            formato: str = 'png',
+            mostrar: bool = False,
+            estilo: str = 'seaborn-v0_8-paper'
+    ):
+        """
+        Genera una gráfica de calidad científica de la evolución del fitness.
+
+        Args:
+            filename: Nombre del archivo de salida
+            dpi: Resolución de la imagen (300 para publicación)
+            formato: Formato de salida ('png', 'pdf', 'svg', 'eps')
+            mostrar: Si mostrar la gráfica además de guardarla
+            estilo: Estilo de matplotlib a usar
+        """
+        if not self.historial_generaciones:
+            print("No hay datos de calibración disponibles para graficar.")
+            return
+
+        # Convertir historial a DataFrame
+        df = pd.DataFrame(self.historial_generaciones)
+
+        # Configurar estilo
+        try:
+            plt.style.use(estilo)
+        except:
+            plt.style.use('seaborn-v0_8-whitegrid')
+
+        # Crear figura con subplots
+        fig = plt.figure(figsize=(14, 10))
+        gs = GridSpec(3, 2, figure=fig, hspace=0.3, wspace=0.3)
+
+        # ==================================================================
+        # 1. Gráfica principal: Evolución del mejor fitness
+        # ==================================================================
+        ax1 = fig.add_subplot(gs[0, :])
+
+        generaciones = df['generacion']
+        ax1.plot(generaciones, df['mejor_fitness'], 'o-',
+                 linewidth=2, markersize=4, color='#2E86AB',
+                 label='Mejor de la generación', alpha=0.8)
+        ax1.plot(generaciones, df['mejor_global'], 's-',
+                 linewidth=2.5, markersize=4, color='#A23B72',
+                 label='Mejor global', alpha=0.9)
+        ax1.fill_between(generaciones, df['promedio'] - df['std'],
+                         df['promedio'] + df['std'],
+                         alpha=0.2, color='#F18F01', label='Promedio ± 1σ')
+        ax1.plot(generaciones, df['promedio'], '--',
+                 linewidth=1.5, color='#F18F01', alpha=0.7)
+
+        ax1.set_xlabel('Generación', fontweight='bold')
+        ax1.set_ylabel('KGE (Fitness)', fontweight='bold')
+        ax1.set_title('Evolución del Fitness Durante la Calibración',
+                      fontweight='bold', pad=15)
+        ax1.legend(loc='lower right', frameon=True, fancybox=True, shadow=True)
+        ax1.grid(True, alpha=0.3, linestyle='--')
+        ax1.set_xlim(left=0)
+
+        # Añadir anotación del mejor valor
+        best_idx = df['mejor_global'].idxmax()
+        ax1.annotate(f'Mejor KGE: {df.loc[best_idx, "mejor_global"]:.4f}\n(Gen. {df.loc[best_idx, "generacion"]})',
+                     xy=(df.loc[best_idx, 'generacion'], df.loc[best_idx, 'mejor_global']),
+                     xytext=(10, 10), textcoords='offset points',
+                     bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.3),
+                     arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0'))
+
+        # ==================================================================
+        # 2. Distribución del fitness por generación (box plot)
+        # ==================================================================
+        ax2 = fig.add_subplot(gs[1, 0])
+
+        # Seleccionar algunas generaciones para el box plot
+        n_boxes = min(15, len(self.historial_poblacion))
+        indices = np.linspace(0, len(self.historial_poblacion) - 1, n_boxes, dtype=int)
+        data_boxes = [self.historial_poblacion[i] for i in indices]
+        positions = [self.historial_generaciones[i]['generacion'] for i in indices]
+
+        bp = ax2.boxplot(data_boxes, positions=positions, widths=max(2, self.num_generations / 30),
+                         patch_artist=True, showfliers=True)
+
+        # Colorear boxes
+        for patch in bp['boxes']:
+            patch.set_facecolor('#A8DADC')
+            patch.set_alpha(0.7)
+        for median in bp['medians']:
+            median.set_color('#E63946')
+            median.set_linewidth(2)
+
+        ax2.set_xlabel('Generación', fontweight='bold')
+        ax2.set_ylabel('Distribución de Fitness', fontweight='bold')
+        ax2.set_title('Distribución Poblacional del Fitness', fontweight='bold')
+        ax2.grid(True, alpha=0.3, linestyle='--', axis='y')
+
+        # ==================================================================
+        # 3. Mejora relativa entre generaciones
+        # ==================================================================
+        ax3 = fig.add_subplot(gs[1, 1])
+
+        mejora = df['mejor_global'].diff().fillna(0)
+        mejora_acumulada = (df['mejor_global'] - df['mejor_global'].iloc[0])
+
+        ax3.bar(generaciones, mejora, color='#06FFA5', alpha=0.6,
+                label='Mejora por generación', edgecolor='black', linewidth=0.5)
+        ax3_twin = ax3.twinx()
+        ax3_twin.plot(generaciones, mejora_acumulada, 'o-',
+                      color='#E63946', linewidth=2, markersize=4,
+                      label='Mejora acumulada')
+
+        ax3.set_xlabel('Generación', fontweight='bold')
+        ax3.set_ylabel('Δ KGE (Mejora)', fontweight='bold', color='#06FFA5')
+        ax3_twin.set_ylabel('Mejora Acumulada', fontweight='bold', color='#E63946')
+        ax3.set_title('Mejora del Fitness', fontweight='bold')
+        ax3.grid(True, alpha=0.3, linestyle='--', axis='y')
+        ax3.tick_params(axis='y', labelcolor='#06FFA5')
+        ax3_twin.tick_params(axis='y', labelcolor='#E63946')
+
+        # Leyendas
+        lines1, labels1 = ax3.get_legend_handles_labels()
+        lines2, labels2 = ax3_twin.get_legend_handles_labels()
+        ax3.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
+
+        # ==================================================================
+        # 4. Convergencia (log scale)
+        # ==================================================================
+        ax4 = fig.add_subplot(gs[2, 0])
+
+        gap = np.abs(df['mejor_global'] - df['mejor_fitness'])
+        ax4.semilogy(generaciones, gap, 'o-', linewidth=2, markersize=4,
+                     color='#457B9D', label='Gap (Mejor global - Mejor gen.)')
+        ax4.semilogy(generaciones, df['std'], 's-', linewidth=2, markersize=4,
+                     color='#F4A261', label='Desv. estándar poblacional')
+
+        ax4.set_xlabel('Generación', fontweight='bold')
+        ax4.set_ylabel('Valor (escala log)', fontweight='bold')
+        ax4.set_title('Convergencia del Algoritmo', fontweight='bold')
+        ax4.legend(loc='best', frameon=True)
+        ax4.grid(True, alpha=0.3, linestyle='--', which='both')
+
+        # ==================================================================
+        # 5. Tabla resumen de estadísticas
+        # ==================================================================
+        ax5 = fig.add_subplot(gs[2, 1])
+        ax5.axis('off')
+
+        # Calcular estadísticas finales
+        stats_finales = {
+            'Mejor KGE alcanzado': f"{df['mejor_global'].max():.6f}",
+            'KGE inicial': f"{df['mejor_global'].iloc[0]:.6f}",
+            'Mejora total': f"{df['mejor_global'].max() - df['mejor_global'].iloc[0]:.6f}",
+            'Generación óptima': f"{df.loc[df['mejor_global'].idxmax(), 'generacion']:.0f}",
+            'Promedio final': f"{df['promedio'].iloc[-1]:.6f}",
+            'Desv. std. final': f"{df['std'].iloc[-1]:.6f}",
+            'Total evaluaciones': f"{self.contador_evaluaciones}",
+            'Generaciones': f"{len(df)}",
+        }
+
+        # Crear tabla
+        tabla_data = [[k, v] for k, v in stats_finales.items()]
+        table = ax5.table(cellText=tabla_data, colLabels=['Métrica', 'Valor'],
+                          cellLoc='left', loc='center',
+                          colWidths=[0.6, 0.4])
+        table.auto_set_font_size(False)
+        table.set_fontsize(9)
+        table.scale(1, 2)
+
+        # Estilizar tabla
+        for i in range(len(tabla_data) + 1):
+            if i == 0:
+                table[(i, 0)].set_facecolor('#457B9D')
+                table[(i, 1)].set_facecolor('#457B9D')
+                table[(i, 0)].set_text_props(weight='bold', color='white')
+                table[(i, 1)].set_text_props(weight='bold', color='white')
+            else:
+                if i % 2 == 0:
+                    table[(i, 0)].set_facecolor('#E8F4F8')
+                    table[(i, 1)].set_facecolor('#E8F4F8')
+
+        ax5.set_title('Resumen de Estadísticas', fontweight='bold', pad=10)
+
+        # ==================================================================
+        # Título general y metadatos
+        # ==================================================================
+        fig.suptitle(f'Análisis de Calibración - Algoritmo Genético\n' +
+                     f'Población: {self.population_size} | Generaciones: {self.num_generations} | ' +
+                     f'Parámetros: {len(self.gene_space)}',
+                     fontsize=14, fontweight='bold', y=0.98)
+
+        # Guardar figura
+        output_path = os.path.join(self.filepath, filename)
+        plt.savefig(output_path, dpi=dpi, bbox_inches='tight',
+                    format=formato, facecolor='white', edgecolor='none')
+
+        print(f'\n{"=" * 60}')
+        print(f'Gráfica guardada en: {output_path}')
+        print(f'Resolución: {dpi} DPI')
+        print(f'Formato: {formato.upper()}')
+        print("=" * 60)
+
+        if mostrar:
+            plt.show()
+        else:
+            plt.close()
+
+    def plotear_fitness_simple(
+            self,
+            filename: str = 'fitness_simple.png',
+            dpi: int = 300,
+            formato: str = 'png',
+            mostrar: bool = False
+    ):
+        """
+        Genera una gráfica simple y clara de la evolución del fitness.
+        Ideal para presentaciones.
+
+        Args:
+            filename: Nombre del archivo de salida
+            dpi: Resolución de la imagen
+            formato: Formato de salida
+            mostrar: Si mostrar la gráfica
+        """
+        if not self.historial_generaciones:
+            print("No hay datos de calibración disponibles para graficar.")
+            return
+
+        df = pd.DataFrame(self.historial_generaciones)
+
+        # Crear figura simple
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+        generaciones = df['generacion']
+
+        # Línea principal
+        ax.plot(generaciones, df['mejor_global'], 'o-',
+                linewidth=3, markersize=6, color='#E63946',
+                label='Mejor fitness global', markerfacecolor='white',
+                markeredgewidth=2)
+
+        # Banda de confianza
+        ax.fill_between(generaciones,
+                        df['promedio'] - df['std'],
+                        df['promedio'] + df['std'],
+                        alpha=0.3, color='#457B9D')
+
+        ax.plot(generaciones, df['promedio'], '--',
+                linewidth=2, color='#457B9D', alpha=0.7,
+                label='Promedio poblacional')
+
+        ax.set_xlabel('Generación', fontsize=14, fontweight='bold')
+        ax.set_ylabel('KGE (Kling-Gupta Efficiency)', fontsize=14, fontweight='bold')
+        ax.set_title('Evolución del Proceso de Calibración',
+                     fontsize=16, fontweight='bold', pad=20)
+
+        ax.legend(loc='lower right', fontsize=12, frameon=True,
+                  fancybox=True, shadow=True)
+        ax.grid(True, alpha=0.3, linestyle='--')
+        ax.set_xlim(left=-1)
+
+        # Anotación final
+        valor_final = df['mejor_global'].iloc[-1]
+        ax.text(0.02, 0.98, f'KGE Final: {valor_final:.4f}',
+                transform=ax.transAxes, fontsize=12,
+                verticalalignment='top',
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+        plt.tight_layout()
+
+        output_path = os.path.join(self.filepath, filename)
+        plt.savefig(output_path, dpi=dpi, bbox_inches='tight',
+                    format=formato, facecolor='white')
+
+        print(f'Gráfica simple guardada en: {output_path}')
+
+        if mostrar:
+            plt.show()
+        else:
+            plt.close()
+
+    def exportar_historial_csv(self, filename: str = 'historial_calibracion.csv'):
+        """
+        Exporta el historial de calibración a un archivo CSV.
+
+        Args:
+            filename: Nombre del archivo CSV
+        """
+        if not self.historial_generaciones:
+            print("No hay datos de calibración disponibles para exportar.")
+            return
+
+        df = pd.DataFrame(self.historial_generaciones)
+        output_path = os.path.join(self.filepath, filename)
+        df.to_csv(output_path, index=False, float_format='%.6f')
+
+        print(f'Historial exportado a: {output_path}')
 
     def _imprimir_configuracion(self, num_genes: int):
         """Imprime la configuración de la calibración."""
@@ -482,10 +811,11 @@ class Calibracion:
             f.write('\n')
             f.write('HISTORIAL DE GENERACIONES:\n')
             f.write('-' * 80 + '\n')
-            f.write(f'{"Gen":>5} | {"Mejor KGE Gen":>15} | {"Mejor KGE Global":>18}\n')
+            f.write(f'{"Gen":>5} | {"Mejor KGE Gen":>15} | {"Mejor KGE Global":>18} | {"Promedio":>12} | {"Std":>10}\n')
             f.write('-' * 80 + '\n')
             for hist in self.historial_generaciones:
-                f.write(f'{hist["generacion"]:5d} | {hist["mejor_fitness"]:15.6f} | {hist["mejor_global"]:18.6f}\n')
+                f.write(f'{hist["generacion"]:5d} | {hist["mejor_fitness"]:15.6f} | '
+                        f'{hist["mejor_global"]:18.6f} | {hist["promedio"]:12.6f} | {hist["std"]:10.6f}\n')
 
         print(f'\nResultados guardados en: {output_file}')
 
@@ -524,9 +854,12 @@ class Calibracion:
 
         return kge_final
 
-    def ejecutar(self) -> Optional[Tuple[List[float], float]]:
+    def ejecutar(self, generar_graficas: bool = True) -> Optional[Tuple[List[float], float]]:
         """
         Ejecuta el proceso completo de calibración.
+
+        Args:
+            generar_graficas: Si generar gráficas al finalizar
 
         Returns:
             Tupla con (mejor_solución, mejor_kge) o None si se interrumpe
@@ -613,6 +946,16 @@ class Calibracion:
         if solution is not None:
             kge_final = self._simular_con_mejor_solucion(solution)
             self._guardar_resultados(solution, kge_final)
+
+            # Generar gráficas
+            if generar_graficas:
+                print('\n' + '=' * 80)
+                print('GENERANDO GRÁFICAS')
+                print('=' * 80)
+                self.plotear_evolucion_fitness(formato='png', dpi=300)
+                self.plotear_evolucion_fitness(formato='pdf', filename='evolucion_fitness.pdf')
+                self.plotear_fitness_simple()
+                self.exportar_historial_csv()
 
             print('\n' + '=' * 80)
             print('PROCESO FINALIZADO')
@@ -745,3 +1088,5 @@ class CalibracionPresets:
             'parent_selection_type': 'rank',
             'stop_criteria': ['saturate_20'],
         }
+
+

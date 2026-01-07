@@ -6,13 +6,12 @@ warnings.filterwarnings('ignore')
 
 #Configuración
 base = Path(__file__).parent.parent
-filepath = f'{base}/data/templates/Chicamocha'
+filepath = f'{base}/data/templates/Canal_vargas'
 header_dict = {
-    "version": "v2.12",
-    "rivname": "Chicamocha",
-    "filename": "Chicamocha",
+    "version": "v2.12",    "rivname": "Canal_vargas",
+    "filename": "Canal_vargas",
     "filedir": filepath,
-    "applabel": "Chicamocha (6/27/2012)",
+    "applabel": "Canal_vargas (6/27/2012)",
     "xmon": 6,
     "xday": 27,
     "xyear": 2012,
@@ -25,7 +24,7 @@ header_dict = {
 }
 
 model = Q2KModel(filepath, header_dict)
-model.cargar_plantillas(filepath + '\\PlantillaBaseQ2K.xlsx')
+model.cargar_plantillas(filepath + '\\PlantillaBaseQ2K_CV2026.xlsx')
 
 n = len(model.data_reaches)
 print(n)
@@ -42,10 +41,10 @@ reach_rates_custom = model.config.generar_reach_rates_custom(
     kdt_list=[None] * n # Detritos
 )
 
-model.configurar_modelo(reach_rates_custom=reach_rates_custom, q_cabecera= 1.06007E-06)
+model.configurar_modelo(reach_rates_custom=reach_rates_custom, q_cabecera= 2.3148E-06)
 model.generar_archivo_q2k()
 model.ejecutar_simulacion()
-model.analizar_resultados(generar_graficas=False)
+model.analizar_resultados(generar_graficas=True)
 resultados, kge_global = model.calcular_metricas_calibracion()
 
 print(f'Kge: {kge_global}')

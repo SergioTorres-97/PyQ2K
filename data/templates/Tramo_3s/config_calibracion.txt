@@ -1,0 +1,31 @@
+================================================================================
+CONFIGURACIÓN DE CALIBRACIÓN
+================================================================================
+
+PARÁMETROS BÁSICOS:
+  num_generations = 100
+  population_size = 50
+  num_parents_mating = 20
+
+SELECCIÓN DE PADRES:
+  parent_selection_type = "tournament"
+  k_tournament = 3
+
+CRUCE:
+  crossover_type = "single_point"
+  crossover_probability = 0.9
+
+MUTACIÓN:
+  mutation_type = "random"
+  mutation_probability = 0.2
+  mutation_percent_genes = 20
+  mutation_by_replacement = False
+
+ELITISMO:
+  keep_elitism = 5
+  keep_parents = -1
+
+OTROS:
+  random_seed = 42
+  allow_duplicate_genes = True
+  stop_criteria = None

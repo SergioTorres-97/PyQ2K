@@ -299,7 +299,14 @@ class Calibracion:
             model.generar_archivo_q2k()
             model.ejecutar_simulacion()
             model.analizar_resultados(generar_graficas=False)
-            resultados, kge_global = model.calcular_metricas_calibracion()
+            resultados, kge_global = model.calcular_metricas_calibracion(pesos = {
+                "dissolved_oxygen": 0.40,
+                "ammonium": 0,
+                "total_phosphorus": 0.10,
+                "total_kjeldahl_nitrogen": 0,
+                "water_temp_c": 0.1,
+                "carbonaceous_bod_fast": 0.40
+            })
 
             return (eval_id, kge_global)
 
@@ -848,7 +855,14 @@ class Calibracion:
         model_final.generar_archivo_q2k()
         model_final.ejecutar_simulacion()
         model_final.analizar_resultados(generar_graficas=True)
-        resultados_final, kge_final = model_final.calcular_metricas_calibracion()
+        resultados_final, kge_final = model_final.calcular_metricas_calibracion(pesos = {
+                "dissolved_oxygen": 0.40,
+                "ammonium": 0,
+                "total_phosphorus": 0.10,
+                "total_kjeldahl_nitrogen": 0,
+                "water_temp_c": 0.1,
+                "carbonaceous_bod_fast": 0.40
+            })
 
         print(f'\nKGE final verificado: {kge_final:.4f}')
 

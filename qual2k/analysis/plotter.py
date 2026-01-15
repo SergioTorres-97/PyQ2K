@@ -30,6 +30,52 @@ class Q2KPlotter:
             '#6c757d', '#264653', '#8ecae6', '#ffb703', '#adb5bd'
         ]
 
+        # Mapeo de labels en inglés a español con unidades
+        self.labels_espanol = {
+            'conductivity': 'Conductividad (μS/cm)',
+            'inorganic_suspended_solids': 'Sólidos Suspendidos Inorgánicos (mg/L)',
+            'dissolved_oxygen': 'Oxígeno Disuelto (mg/L)',
+            'carbonaceous_bod_slow': 'DBO Carbonácea Lenta (mg/L)',
+            'carbonaceous_bod_fast': 'DBO Carbonácea Rápida (mg/L)',
+            'nitrite': 'Nitrito (ug/L)',
+            'ammonium': 'Amonio (ug/L)',
+            'nitrate': 'Nitrato (ug/L)',
+            'organic_phosphorus': 'Fósforo Orgánico (ug/L)',
+            'inorganic_phosphorus': 'Fósforo Inorgánico (ug/L)',
+            'detritus': 'Detritus (ug/L)',
+            'pathogen': 'Patógenos (nmp/100mL)',
+            'alkalinity': 'Alcalinidad (mg CaCO₃/L)',
+            'const_i': 'Constituyente I (nmp/100mL)',
+            'const_ii': 'Constituyente II (nmp/100mL)',
+            'const_iii': 'Constituyente III (mg/L)',
+            'pH': 'pH (-)',
+            'total_nitrogen': 'Nitrógeno Total (ug/L)',
+            'total_phosphorus': 'Fósforo Total (ug/L)',
+            'total_kjeldahl_nitrogen': 'Nitrógeno Kjeldahl Total (ug/L)',
+            'total_suspended_solids': 'Sólidos Suspendidos Totales (mg/L)',
+            'ultimate_cbod': 'DBO Carbonácea Última (mg/L)',
+            'ammonia': 'Amoníaco (ug/L)',
+            'water_temp_c': 'Temperatura del Agua (°C)',
+            'flow': 'Caudal (m³/s)',
+            'hydraulic_head': 'Carga Hidráulica (m)',
+            'channel_top_width': 'Ancho Superior del Canal (m)',
+            'cross_section_area': 'Área de Sección Transversal (m²)',
+            'flow_velocity': 'Velocidad de Flujo (m/s)',
+            'travel_time': 'Tiempo de Viaje (días)',
+        }
+
+    def get_label(self, col_name: str) -> str:
+        """
+        Obtiene el label en español con unidades.
+
+        Args:
+            col_name: Nombre de la columna en inglés
+
+        Returns:
+            Label en español con unidades, o nombre original si no existe mapeo
+        """
+        return self.labels_espanol.get(col_name, col_name)
+
     def plot_parametro(self, df: pd.DataFrame, x_col: str, y_col: str,
                        rutaGuardado: str, titulo: str = "",
                        xlabel: str = "Distancia (km)", ylabel: str = None,
@@ -56,12 +102,15 @@ class Q2KPlotter:
             color=color, marker="o", markersize=6, linewidth=2
         )
 
+        # Usar label en español para el título si no se proporciona uno
+        label_y = self.get_label(y_col)
+
         ax.set_title(
-            titulo if titulo else f"Perfil Longitudinal de {y_col}",
+            titulo if titulo else f"Perfil Longitudinal de {label_y}",
             fontweight="bold", fontstyle="italic", fontsize=12, pad=15
         )
         ax.set_xlabel(xlabel, fontweight="bold", fontsize=10)
-        ax.set_ylabel(ylabel if ylabel else y_col, fontsize=10, fontweight="bold")
+        ax.set_ylabel(ylabel if ylabel else label_y, fontsize=10, fontweight="bold")
 
         ax.invert_xaxis()
         ax.set_xlim(df[x_col].max(), 0)
@@ -74,7 +123,7 @@ class Q2KPlotter:
         ax.tick_params(axis='both', which='minor', length=3, width=0.8, direction='inout')
 
         plt.tight_layout()
-        plt.savefig(os.path.join(rutaGuardado, f'{nombre_archivo}.png'), bbox_inches='tight')
+        plt.savefig(os.path.join(rutaGuardado, f'{nombre_archivo}.png'), bbox_inches='tight', dpi=300)
         plt.close()
 
     def plot_all_params(self, wq: pd.DataFrame, rutaGuardado: str) -> None:
@@ -96,7 +145,7 @@ class Q2KPlotter:
                 x_col=x,
                 y_col=columnas_graficas[i],
                 rutaGuardado=rutaGuardado,
-                titulo=' ',
+                titulo='',
                 xlabel='Distancia [km]',
                 ylabel=None,
                 color=color
@@ -141,12 +190,15 @@ class Q2KPlotter:
             color=color_obs, marker="o", s=40, label="Observado"
         )
 
+        # Usar label en español
+        label_sim = self.get_label(sim_col)
+
         ax.set_title(
-            titulo if titulo else f"Perfil Longitudinal de {sim_col}",
+            titulo if titulo else f"Calibración: {label_sim}",
             fontweight="bold", fontstyle="italic", fontsize=12, pad=15
         )
         ax.set_xlabel(xlabel, fontweight="bold", fontsize=10)
-        ax.set_ylabel(ylabel if ylabel else sim_col, fontsize=10, fontweight="bold")
+        ax.set_ylabel(ylabel if ylabel else label_sim, fontsize=10, fontweight="bold")
 
         ax.invert_xaxis()
         ax.set_xlim(df[x_col].max(), 0)
@@ -158,10 +210,10 @@ class Q2KPlotter:
         ax.tick_params(axis='both', which='major', length=6, width=1.2, direction='inout')
         ax.tick_params(axis='both', which='minor', length=3, width=0.8, direction='inout')
 
-        ax.legend()
+        ax.legend(loc='best', framealpha=0.9)
 
         plt.tight_layout()
-        plt.savefig(os.path.join(rutaGuardado, f'{nombre_archivo}.png'), bbox_inches='tight')
+        plt.savefig(os.path.join(rutaGuardado, f'{nombre_archivo}.png'), bbox_inches='tight', dpi=300)
         plt.close()
 
     def plot_all_params_cal_obs(self, df: pd.DataFrame, rutaGuardado: str) -> None:
@@ -175,6 +227,7 @@ class Q2KPlotter:
         x = 'Distancia Longitudinal (km)'
 
         pares = [
+            ("flow","flow_obs"),
             ("water_temp_c", "water_temp_c_obs"),
             ("total_suspended_solids", "total_suspended_solids_obs"),
             ("dissolved_oxygen", "dissolved_oxygen_obs"),
@@ -182,6 +235,12 @@ class Q2KPlotter:
             ("total_kjeldahl_nitrogen", "total_kjeldahl_nitrogen_obs"),
             ("ammonium", "ammonium_obs"),
             ("total_phosphorus", "total_phosphorus_obs"),
+            ("conductivity",'conductivity_obs'),
+            ("nitrate", "nitrate_obs"),
+            ("inorganic_phosphorus","inorganic_phosphorus_obs"),
+            ("pathogen", "pathogen_obs"),
+            ("pH", "pH_obs"),
+            ("alkalinity", "alkalinity_obs"),
         ]
 
         for i, (sim_col, obs_col) in enumerate(pares):
@@ -192,7 +251,7 @@ class Q2KPlotter:
                 sim_col=sim_col,
                 obs_col=obs_col,
                 rutaGuardado=rutaGuardado,
-                titulo=f"Perfil Longitudinal de {sim_col}",
+                titulo='',
                 xlabel="Distancia [km]",
                 ylabel=None,
                 color=color,

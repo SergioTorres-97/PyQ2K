@@ -221,7 +221,15 @@ class Q2KResultsAnalyzer:
         """
         mapeoObservados = {
             'X_QUAL2K': 'Distancia Longitudinal (km)',
+            'CAUDAL': 'flow',
             'TEMPERATURA': 'water_temp_c',
+            'CONDUCTIVIDAD': 'conductivity',
+            'NITRATOS': 'nitrate',
+            'ORTOFOSFATOS': 'inorganic_phosphorus',
+            'COLIFORMES_TOTALES': 'pathogen',
+            'E_COLI': 'const_ii',
+            'ALCALINIDAD': 'alkalinity',
+            'pH': 'pH',
             'SST': 'total_suspended_solids',
             'OXIGENO_DISUELTO': 'dissolved_oxygen',
             'DBO5': 'carbonaceous_bod_fast',
@@ -233,7 +241,15 @@ class Q2KResultsAnalyzer:
         dataWQ = dataWQ.rename(columns=mapeoObservados)
         dataWQ = dataWQ[[
             'Distancia Longitudinal (km)',
+            'flow',
             'water_temp_c',
+            'conductivity',
+            'nitrate',
+            'inorganic_phosphorus',
+            'pathogen',
+            'const_ii',
+            'alkalinity',
+            'pH',
             'total_suspended_solids',
             'dissolved_oxygen',
             'carbonaceous_bod_fast',
@@ -264,7 +280,6 @@ class Q2KResultsAnalyzer:
         """
         wq_model = wq_model.sort_values('Distancia Longitudinal (km)').reset_index(drop=True)
         data_obs = data_obs.sort_values('Distancia Longitudinal (km)').reset_index(drop=True)
-
         # Guardar copia del modelo para no modificarlo
         modelo_temp = wq_model.copy()
 
@@ -310,7 +325,6 @@ class Q2KResultsAnalyzer:
 
         # Limpiar columnas auxiliares
         df_merge = df_merge.drop(['idx_modelo', 'dist_modelo'], axis=1, errors='ignore')
-
         return df_merge
 
     @staticmethod
@@ -329,7 +343,7 @@ class Q2KResultsAnalyzer:
             Tuple con (resultados_por_variable, kge_global)
         """
 
-        dataExp = dataExp.dropna()
+        # dataExp = dataExp.dropna()
         resultados = {}
         for sim_col, obs_col in pares:
             kge_val = metricas.kge(dataExp[obs_col], dataExp[sim_col])

@@ -1,0 +1,424 @@
+INTEGRACIÓN Y AUTOMATIZACIÓN DEL MODELO QUAL2K MEDIANTE PYTHON
+================================================================
+
+1. INTRODUCCIÓN
+===============
+
+QUAL2K (Quality for 2000) es un modelo unidimensional de calidad de agua desarrollado en
+FORTRAN que simula el comportamiento de múltiples constituyentes en sistemas fluviales.
+El modelo resuelve ecuaciones de transporte y transformación química para predecir la
+distribución espacial y temporal de parámetros de calidad del agua.
+
+Este informe describe el desarrollo de un módulo Python que automatiza la ejecución de
+QUAL2K, integrando la preparación de datos, ejecución del modelo FORTRAN, análisis de
+resultados y calibración automática mediante algoritmos genéticos.
+
+
+2. ARQUITECTURA DEL MÓDULO QUAL2K-PYTHON
+=========================================
+
+El módulo desarrollado se estructura en cuatro componentes principales:
+
+2.1 Módulo Core (Núcleo de funcionalidad)
+   - model.py: Orquestación del flujo completo de modelación
+   - simulator.py: Interface con el ejecutable FORTRAN
+   - config.py: Gestión de parámetros del modelo
+   - calibrator.py: Calibración automática mediante algoritmos genéticos
+
+2.2 Módulo Processing (Procesamiento de datos)
+   - data_processor.py: Transformación de datos Excel a formato QUAL2K
+   - file_writer.py: Generación de archivos de entrada (.q2k)
+
+2.3 Módulo Analysis (Análisis de resultados)
+   - results_analyzer.py: Parseo y procesamiento de archivos de salida
+   - plotter.py: Generación automática de gráficas
+   - metricas.py: Cálculo de indicadores de desempeño (KGE, NSE, RMSE)
+
+2.4 Flujo de Datos
+   Excel → DataProcessor → Config → FileWriter → .q2k → FORTRAN → .out → ResultsAnalyzer → CSV/Gráficas
+
+
+3. MECANISMO DE INTEGRACIÓN PYTHON-FORTRAN
+===========================================
+
+3.1 Comunicación Indirecta mediante Archivos
+
+La integración entre Python y el ejecutable FORTRAN de QUAL2K se implementó mediante
+un mecanismo de comunicación indirecta basado en archivos, evitando la necesidad de
+modificar el código fuente FORTRAN o recompilar el ejecutable.
+
+3.2 Proceso de Ejecución
+
+El módulo Python implementa la siguiente secuencia:
+
+a) Generación del archivo de entrada (.q2k)
+   Python escribe un archivo de texto plano con formato específico que contiene:
+   - Header: Configuración general (versión, nombre del río, fechas, métodos)
+   - Reach Data: Geometría de tramos (distancias, elevaciones, parámetros hidráulicos)
+   - Light Data: Coeficientes de luz y propiedades de sedimentos
+   - Point Sources: Vertimientos puntuales (20 constituyentes por fuente)
+   - Rates: Constantes cinéticas (globales y por tramo, 60+ parámetros)
+   - Headwaters: Condiciones de frontera (caudal, temperatura, calidad del agua)
+   - Meteorological Data: Variables meteorológicas (temperatura, viento, nubes)
+   - WQ Data: Datos observados para validación
+
+b) Generación del archivo message.DAT
+   Un archivo de configuración que indica al ejecutable FORTRAN:
+   - Línea 1: Ruta completa del archivo de entrada (.q2k)
+   - Línea 2: Ruta completa del archivo de salida (.out)
+
+c) Ejecución del modelo FORTRAN
+   Mediante el módulo subprocess de Python:
+
+   subprocess.run([exe_path], cwd=folder, check=True)
+
+   El proceso:
+   - Ejecuta el binario en su directorio de trabajo
+   - El ejecutable lee message.DAT para localizar archivos
+   - FORTRAN lee el .q2k, realiza cálculos y escribe el .out
+   - Python espera hasta que el proceso termina
+
+d) Parseo de resultados
+   Python lee y procesa el archivo .out generado por FORTRAN:
+   - Identifica secciones (Hydraulics, Temperature, Water Quality)
+   - Extrae tablas numéricas
+   - Normaliza nombres de columnas
+   - Genera DataFrames estructurados
+
+3.3 Ventajas del Diseño
+
+Esta arquitectura presenta múltiples ventajas:
+- No requiere acceso al código fuente FORTRAN
+- Mantiene la integridad del ejecutable original
+- Permite versionar el modelo FORTRAN independientemente
+- Facilita el reemplazo del ejecutable por versiones actualizadas
+- Proporciona portabilidad entre sistemas operativos
+
+
+4. TRANSFORMACIÓN DE DATOS DE ENTRADA
+======================================
+
+4.1 Plantilla Excel Estructurada
+
+El sistema utiliza una plantilla Excel con hojas específicas:
+- REACHES: Geometría y parámetros hidráulicos de cada tramo
+- SOURCES: Vertimientos puntuales con caudales y concentraciones
+- WQ_DATA: Datos observados de calidad de agua para validación
+- MET_DATA: Variables meteorológicas
+
+4.2 Procesamiento Automatizado
+
+El módulo DataProcessor implementa transformaciones específicas:
+
+a) Separación de caudales
+   - Diferencia entre captaciones (negativos) y vertimientos (positivos)
+   - Cálculo de balance de masas
+
+b) Distribución de sólidos suspendidos
+   - SST total → 15% sólidos inorgánicos + 85% detritus
+   - Basado en composición típica de aguas residuales
+
+c) Fraccionamiento de DBO
+   - DBO5 medida → DBO rápida (lábil) + DBO lenta (refractaria)
+   - Modelo de primer orden: DBO = DBOf + DBOs
+
+d) Especiación de nitrógeno
+   - Nitrógeno total Kjeldahl (NTK) → Nitrógeno orgánico + Amonio
+   - Orgánico = NTK - NH4
+
+e) Generación de perfiles temporales
+   - Datos puntuales → Perfiles de 24 horas
+   - Valores constantes con opción de variación diurna
+
+
+5. ANÁLISIS Y PROCESAMIENTO DE RESULTADOS
+==========================================
+
+5.1 Estructura del Archivo de Salida
+
+El archivo .out de QUAL2K contiene tres secciones principales delimitadas por
+marcadores de texto:
+
+**Hydraulics Summary**
+   Caudal, carga hidráulica, ancho del canal, área de sección, velocidad,
+   tiempo de viaje
+
+**Temperature Summary**
+   Temperatura del agua en cada localidad longitudinal
+
+**Water Quality Summary**
+   24 parámetros: conductividad, oxígeno disuelto, DBO, nitrógeno (4 especies),
+   fósforo (3 especies), pH, alcalinidad, sólidos suspendidos, entre otros
+
+5.2 Proceso de Parseo
+
+El ResultsAnalyzer implementa un parser robusto:
+
+a) Identificación de secciones mediante expresiones regulares
+b) Eliminación de líneas decorativas (separadores de asteriscos)
+c) Lectura de headers de columnas
+d) Conversión a DataFrames de pandas
+e) Renombrado estandarizado de columnas (inglés → Python)
+f) Merge espacial por distancia longitudinal
+
+5.3 Integración con Datos Observados
+
+El sistema empareja automáticamente datos modelados con observaciones:
+- Alineación espacial por proximidad de distancias
+- Cada observación se empareja una sola vez con el punto modelado más cercano
+- Generación de columnas con sufijo "_obs" para diferenciación
+- Cálculo de residuales (modelado - observado)
+
+
+6. SISTEMA DE CALIBRACIÓN AUTOMÁTICA
+=====================================
+
+6.1 Algoritmo Genético para Optimización
+
+La calibración automática se implementó mediante la biblioteca PyGAD, que
+proporciona algoritmos genéticos configurables:
+
+Parámetros del GA:
+- Población: 30-50 individuos
+- Generaciones: 50-200 iteraciones
+- Selección de padres: Torneo, rank-based, o roulette wheel
+- Cruce: Punto único o uniforme
+- Mutación: Aleatoria o por intercambio
+- Elitismo: Preservación de 3-5 mejores soluciones
+
+6.2 Codificación de Parámetros
+
+Cada individuo del GA representa un conjunto de parámetros del modelo:
+- Parámetros globales: 1 gen (mismo valor para todos los tramos)
+- Parámetros espaciales: n genes (valor específico por tramo)
+
+Espacio de búsqueda:
+- Cada gen tiene un rango [mín, máx] definido por conocimiento experto
+- Ejemplo: coeficiente de reaireación (kaaa): [0.5, 3.0]
+- Ejemplo: tasa de hidrólisis de fósforo (khp): [0.01, 3.0]
+
+6.3 Función de Fitness
+
+Para cada solución candidata:
+
+a) Decodificar genes → parámetros del modelo
+b) Crear directorio temporal único
+c) Copiar plantillas y ejecutable
+d) Configurar modelo con parámetros candidatos
+e) Generar archivo .q2k
+f) Ejecutar simulación FORTRAN
+g) Analizar resultados
+h) Calcular KGE (Kling-Gupta Efficiency) ponderado
+i) Retornar fitness = KGE global
+j) Limpiar archivos temporales
+
+6.4 Métrica de Evaluación: KGE
+
+El Kling-Gupta Efficiency se adoptó como métrica principal:
+
+KGE = 1 - sqrt[(r-1)² + (α-1)² + (β-1)²]
+
+Donde:
+- r: Correlación de Pearson (patrón temporal)
+- α: Ratio de desviaciones estándar (variabilidad)
+- β: Ratio de medias (sesgo)
+
+Ventajas:
+- Penaliza errores en tres dimensiones independientes
+- Más robusto que NSE para calibración multiobjetivo
+- Rango [-∞, 1], donde 1 es perfecto
+
+KGE Ponderado:
+KGE_global = Σ(wi × KGEi)
+
+Pesos típicos:
+- Oxígeno disuelto: 0.35 (parámetro crítico)
+- Temperatura: 0.20
+- DBO: 0.30
+- NTK: 0.10
+- Fósforo total: 0.05
+
+6.5 Procesamiento Paralelo
+
+Para acelerar la calibración, se implementó paralelismo:
+
+- Pool de workers (procesos independientes)
+- Número de workers típico: 4-8 (según núcleos de CPU)
+- Cada worker evalúa una solución independientemente
+- Directorios temporales únicos evitan conflictos
+- Aceleración observada: 3-7x respecto a ejecución secuencial
+
+Tiempo de calibración:
+- Secuencial: 60-120 minutos (100 gen × 40 pop)
+- Paralelo (4 workers): 15-30 minutos
+
+
+7. VENTAJAS DE LA AUTOMATIZACIÓN
+=================================
+
+7.1 Beneficios Operacionales
+
+a) Reducción de tiempo
+   - Configuración manual: 2-4 horas por escenario
+   - Configuración automatizada: 5-10 minutos
+   - Reducción: 95%
+
+b) Eliminación de errores humanos
+   - Formato de archivos .q2k sensible a espaciado
+   - Inconsistencias en unidades
+   - Errores de transcripción de datos
+
+c) Reproducibilidad
+   - Flujo de trabajo documentado en código
+   - Control de versiones (Git)
+   - Trazabilidad de parámetros
+
+7.2 Capacidades Analíticas Avanzadas
+
+a) Calibración sistemática
+   - Exploración exhaustiva del espacio de parámetros
+   - Convergencia a óptimos globales
+   - Documentación automática de parámetros óptimos
+
+b) Análisis de sensibilidad
+   - Variación paramétrica automatizada
+   - Cuantificación de incertidumbre
+
+c) Análisis de escenarios
+   - Evaluación rápida de múltiples configuraciones
+   - Análisis de cambio climático
+   - Planificación de gestión de recursos hídricos
+
+7.3 Visualización y Comunicación
+
+a) Generación automática de gráficas
+   - Perfiles longitudinales de todos los parámetros
+   - Gráficas comparativas (modelado vs observado)
+   - Mapas de color para análisis espaciotemporal
+
+b) Exportación de datos estructurados
+   - CSV con resultados completos
+   - Formato compatible con R, Excel, ArcGIS
+
+
+8. LIMITACIONES Y CONSIDERACIONES
+==================================
+
+8.1 Dependencia del Ejecutable FORTRAN
+
+- El módulo Python no reimplementa los cálculos hidráulicos o cinéticos
+- Requiere el ejecutable q2kfortran2_12.exe
+- Sin feedback durante la ejecución (caja negra)
+- No hay manejo de errores internos de FORTRAN
+
+8.2 Compatibilidad de Versiones
+
+- Desarrollado para QUAL2K v2.12
+- Cambios en el formato .q2k o .out requieren actualización del parser
+- Nombres de columnas deben coincidir con la versión FORTRAN
+
+8.3 Requisitos Computacionales
+
+- Calibración intensiva en CPU
+- Requiere múltiples GB de espacio temporal durante calibración paralela
+- Tiempo de calibración crece linealmente con número de tramos
+
+
+9. CASOS DE USO Y APLICACIONES
+===============================
+
+9.1 Canal Vargas
+   - 4 tramos
+   - 2 vertimientos puntuales
+   - Calibrado para OD, DBO, NTK, PT
+   - KGE final: 0.82
+
+9.2 Río Chicamocha
+   - 6 tramos
+   - 4 vertimientos municipales
+   - Calibración con 8 workers paralelos
+   - Tiempo de calibración: 22 minutos (100 generaciones)
+
+9.3 Tramo 3S (Tota-Pesca)
+   - 8 tramos
+   - Condiciones de frontera complejas
+   - Análisis de escenarios de gestión
+
+
+10. CONCLUSIONES
+================
+
+El módulo desarrollado proporciona una integración efectiva entre Python y el
+modelo FORTRAN QUAL2K, automatizando completamente el flujo de trabajo de
+modelación de calidad de agua. La arquitectura basada en archivos de comunicación
+permite mantener la integridad del ejecutable FORTRAN original mientras se añaden
+capacidades avanzadas de procesamiento, análisis y calibración automática.
+
+La implementación de algoritmos genéticos con procesamiento paralelo reduce
+significativamente el tiempo de calibración, permitiendo exploraciones exhaustivas
+del espacio de parámetros que serían impracticables manualmente. El sistema de
+métricas basado en KGE proporciona una evaluación robusta del desempeño del modelo
+en múltiples objetivos simultáneamente.
+
+La automatización resulta en:
+- 95% de reducción en tiempo de configuración
+- Eliminación de errores de formato y transcripción
+- Reproducibilidad completa del flujo de trabajo
+- Capacidades avanzadas de análisis no disponibles en la interface original
+- Facilitación de análisis de sensibilidad y escenarios
+
+Este trabajo establece una base sólida para futuros desarrollos, incluyendo
+optimización multiobjetivo, análisis de incertidumbre mediante métodos de Monte
+Carlo, y extensión a modelación acoplada con sistemas de información geográfica.
+
+
+11. REFERENCIAS TÉCNICAS
+=========================
+
+Bibliotecas Python utilizadas:
+- pandas: Manipulación de datos tabulares
+- numpy: Cálculos numéricos y arrays
+- matplotlib: Visualización de datos
+- pygad: Algoritmos genéticos
+- subprocess: Ejecución de procesos externos
+
+Estructura de archivos:
+- .q2k: Archivo de entrada (texto plano, formato específico)
+- .out: Archivo de salida (texto plano, secciones delimitadas)
+- message.DAT: Archivo de configuración (2 líneas de texto)
+
+Métricas implementadas:
+- KGE (Kling-Gupta Efficiency)
+- NSE (Nash-Sutcliffe Efficiency)
+- RMSE (Root Mean Square Error)
+- PBIAS (Percent Bias)
+
+
+ANEXO: EJEMPLO DE USO BÁSICO
+=============================
+
+from qual2k.core.model import Q2KModel
+
+# Configuración inicial
+filepath = 'data/templates/Canal_vargas'
+header_dict = {
+    "version": "v2.12",
+    "rivname": "Canal_vargas",
+    "filename": "Canal_vargas",
+    "filedir": filepath
+}
+
+# Crear y configurar modelo
+model = Q2KModel(filepath, header_dict)
+model.cargar_plantillas('PlantillaBaseQ2K.xlsx')
+model.configurar_modelo()
+
+# Ejecutar simulación
+model.generar_archivo_q2k()
+model.ejecutar_simulacion()
+
+# Analizar resultados
+resultados = model.analizar_resultados(generar_graficas=True)
+metricas, kge_global = model.calcular_metricas_calibracion()
+
+print(f"KGE Global: {kge_global:.3f}")

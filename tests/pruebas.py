@@ -7,14 +7,14 @@ if __name__ == '__main__':
 
     # Configuración base
     base = Path(__file__).parent.parent
-    filepath = f'{base}/data/templates/Chicamocha'
+    filepath = f'{base}/data/templates/Tramo_3s'
 
     header_dict = {
         "version": "v2.12",
-        "rivname": "Chicamocha",
-        "filename": "Chicamocha",
+        "rivname": "Tramo_3s",
+        "filename": "Tramo_3s",
         "filedir": filepath,
-        "applabel": "Chicamocha (6/27/2012)",
+        "applabel": "Tramo_3s (6/27/2012)",
         "xmon": 6,
         "xday": 27,
         "xyear": 2012,
@@ -42,7 +42,7 @@ if __name__ == '__main__':
             header_dict=header_dict,
             parametros=parametros,
             # Básicos
-            num_generations=300,
+            num_generations=100,
             population_size=50,
             num_parents_mating=20,
             # Selección

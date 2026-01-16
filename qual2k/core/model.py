@@ -258,17 +258,27 @@ class Q2KModel:
         # Pesos por defecto
         if pesos is None:
             pesos = {
-                "dissolved_oxygen": 0.2,
-                "ammonium": 0.15,
-                "total_phosphorus": 0.15,
-                "total_kjeldahl_nitrogen": 0.15,
-                "water_temp_c": 0.1,
-                "carbonaceous_bod_fast": 0.25
+                "water_temp_c": 0.05,
+                "conductivity": 0.05,
+                "nitrate": 0.05,
+                "pathogen": 0.10,
+                "pH": 0.05,
+                "total_suspended_solids": 0.05,
+                "dissolved_oxygen": 0.30,
+                "carbonaceous_bod_fast": 0.30,
+                "total_kjeldahl_nitrogen": 0.02,
+                "ammonium": 0.02,
+                "total_phosphorus": 0.01
             }
 
         # Pares de columnas
         pares = [
             ("water_temp_c", "water_temp_c_obs"),
+            ("conductivity","conductivity_obs"),
+            ("nitrate","nitrate_obs"),
+            ("pathogen", "pathogen_obs"),
+            ("pH","pH_obs"),
+            ("total_suspended_solids", "total_suspended_solids_obs"),
             ("dissolved_oxygen", "dissolved_oxygen_obs"),
             ("carbonaceous_bod_fast", "carbonaceous_bod_fast_obs"),
             ("total_kjeldahl_nitrogen", "total_kjeldahl_nitrogen_obs"),

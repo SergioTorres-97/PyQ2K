@@ -45,14 +45,19 @@ reach_rates_custom = model.config.generar_reach_rates_custom(
 model.configurar_modelo(reach_rates_custom=reach_rates_custom, q_cabecera= 2.3148E-06)
 model.generar_archivo_q2k()
 model.ejecutar_simulacion()
-model.analizar_resultados(generar_graficas=False)
+model.analizar_resultados(generar_graficas=True)
 resultados, kge_global = model.calcular_metricas_calibracion(pesos = {
-                "dissolved_oxygen": 0.35,
-                "ammonium": 0.15,
-                "total_phosphorus": 0,
-                "total_kjeldahl_nitrogen": 0,
-                "water_temp_c": 0.2,
-                "carbonaceous_bod_fast": 0.3
+                "water_temp_c": 0.05,
+                "conductivity": 0.05,
+                "nitrate": 0.05,
+                "pathogen": 0.10,
+                "pH": 0.05,
+                "total_suspended_solids": 0.05,
+                "dissolved_oxygen": 0.30,
+                "carbonaceous_bod_fast": 0.30,
+                "total_kjeldahl_nitrogen": 0.02,
+                "ammonium": 0.02,
+                "total_phosphorus": 0.01
             })
 
 print(f'Kge: {kge_global}')

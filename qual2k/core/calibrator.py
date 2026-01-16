@@ -300,12 +300,17 @@ class Calibracion:
             model.ejecutar_simulacion()
             model.analizar_resultados(generar_graficas=False)
             resultados, kge_global = model.calcular_metricas_calibracion(pesos = {
-                "dissolved_oxygen": 0.40,
-                "ammonium": 0,
-                "total_phosphorus": 0.10,
-                "total_kjeldahl_nitrogen": 0,
-                "water_temp_c": 0.1,
-                "carbonaceous_bod_fast": 0.40
+                "water_temp_c": 0.05,
+                "conductivity": 0.05,
+                "nitrate": 0.05,
+                "pathogen": 0.10,
+                "pH": 0.05,
+                "total_suspended_solids": 0.05,
+                "dissolved_oxygen": 0.30,
+                "carbonaceous_bod_fast": 0.30,
+                "total_kjeldahl_nitrogen": 0.02,
+                "ammonium": 0.02,
+                "total_phosphorus": 0.01
             })
 
             return (eval_id, kge_global)
@@ -856,12 +861,17 @@ class Calibracion:
         model_final.ejecutar_simulacion()
         model_final.analizar_resultados(generar_graficas=True)
         resultados_final, kge_final = model_final.calcular_metricas_calibracion(pesos = {
-                "dissolved_oxygen": 0.40,
-                "ammonium": 0,
-                "total_phosphorus": 0.10,
-                "total_kjeldahl_nitrogen": 0,
-                "water_temp_c": 0.1,
-                "carbonaceous_bod_fast": 0.40
+                "water_temp_c": 0.05,
+                "conductivity": 0.05,
+                "nitrate": 0.05,
+                "pathogen": 0.10,
+                "pH": 0.05,
+                "total_suspended_solids": 0.05,
+                "dissolved_oxygen": 0.30,
+                "carbonaceous_bod_fast": 0.30,
+                "total_kjeldahl_nitrogen": 0.02,
+                "ammonium": 0.02,
+                "total_phosphorus": 0.01
             })
 
         print(f'\nKGE final verificado: {kge_final:.4f}')

@@ -63,11 +63,11 @@ python -m venv .venv
 .venv\Scripts\activate        # Windows
 # source .venv/bin/activate   # Linux/Mac
 
-# Dependencias del paquete core
-pip install -e .
+# Todas las dependencias del proyecto (núcleo + webapp)
+pip install -r requirements.txt
 
-# Dependencias adicionales para la webapp
-pip install -r webapp/requirements_web.txt
+# Instalar el paquete qual2k en modo editable
+pip install -e .
 ```
 
 ### 3. Configurar la webapp (solo si se usa el Modo 2)

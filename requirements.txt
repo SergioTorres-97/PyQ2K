@@ -1,0 +1,29 @@
+# Dependencias del proyecto PYQ2K (qual2k + interfaz web Django)
+# Instalación: pip install -r requirements.txt
+# Actualizado: 2026-08-06
+
+# ── Núcleo qual2k ─────────────────────────────────────────────────────────
+# Datos y cálculo
+numpy==2.3.5
+pandas==2.3.3
+scipy==1.16.3
+
+# Lectura de Excel
+openpyxl==3.1.5
+
+# Visualización
+matplotlib==3.10.7
+seaborn==0.13.2
+
+# Calibración (algoritmo genético)
+pygad==3.5.0
+
+# ── Interfaz web Django ───────────────────────────────────────────────────
+# Web framework
+Django==6.0.3
+gunicorn
+asgiref==3.11.1
+sqlparse==0.5.5
+
+# Gráficas interactivas
+plotly==6.6.0

@@ -258,7 +258,8 @@ _CAL_OBS_PARES = [
     ('water_temp_c',            'water_temp_c_obs'),
     ('total_suspended_solids',  'total_suspended_solids_obs'),
     ('dissolved_oxygen',        'dissolved_oxygen_obs'),
-    ('carbonaceous_bod_fast',   'carbonaceous_bod_fast_obs'),
+    ('dbo5_estimada',           'dbo5_estimada_obs'),
+    ('dqo_calculada',           'dqo_calculada_obs'),
     ('total_kjeldahl_nitrogen', 'total_kjeldahl_nitrogen_obs'),
     ('ammonium',                'ammonium_obs'),
     ('total_phosphorus',        'total_phosphorus_obs'),
@@ -323,7 +324,8 @@ def generate_plotly_run_charts(run) -> None:
     os.makedirs(plotly_comp_dir, exist_ok=True)
 
     # ── Perfiles longitudinales ───────────────────────────────────────────────
-    sim_cols = [c for c in df.columns if c != x_col and not c.endswith('_obs')]
+    sim_cols = [c for c in df.columns if c != x_col and not c.endswith('_obs')
+                and pd.api.types.is_numeric_dtype(df[c])]
     for i, col in enumerate(sim_cols):
         color = _COLORES_PLOTLY[i % len(_COLORES_PLOTLY)]
         label = labels.get(col, col)

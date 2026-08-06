@@ -51,7 +51,7 @@ resultados, kge_global = model.calcular_metricas_calibracion(pesos = {
                 "total_phosphorus": 0,
                 "total_kjeldahl_nitrogen": 0,
                 "water_temp_c": 0.2,
-                "carbonaceous_bod_fast": 0.3
+                "dbo5_estimada": 0.3
             })
 
 print(f'Kge: {kge_global}')

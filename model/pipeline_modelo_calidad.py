@@ -51,22 +51,16 @@ MAPEO_COLUMNAS = {
     'conductivity':           'CONDUCTIVIDAD',
     'total_suspended_solids': 'SST',
     'dissolved_oxygen':       'OXIGENO_DISUELTO',
-    'carbonaceous_bod_fast':  'DBO5',
+    'dbo5_estimada':          'DBO5',
+    'dqo_calculada':          'DQO',
     'total_kjeldahl_nitrogen':'NTK',
     'ammonium':               'NITROGENO_AMONIACAL',
-    'nitrite':                'NITRITOS',
     'nitrate':                'NITRATOS',
     'total_phosphorus':       'FOSFORO_TOTAL',
     'inorganic_phosphorus':   'ORTOFOSFATOS',
     'pathogen':               'E_COLI',
     'alkalinity':             'ALCALINIDAD',
     'pH':                     'pH',
-}
-
-# Columnas expresadas en µg/L en el CSV → se convierten a mg/L dividiendo por 1000
-COLUMNAS_UG_A_MG = {
-    'total_kjeldahl_nitrogen', 'ammonium', 'nitrite',
-    'nitrate', 'total_phosphorus', 'inorganic_phosphorus',
 }
 
 
@@ -119,8 +113,6 @@ def actualizar_vertimiento_desde_resultados(
         for col_csv, col_excel in MAPEO_COLUMNAS.items():
             if col_csv in resultados.index and col_excel in excel_vertimientos.columns:
                 valor = resultados[col_csv] if pd.notna(resultados[col_csv]) else None
-                if valor is not None and col_csv in COLUMNAS_UG_A_MG:
-                    valor = valor / 1000.0  # µg/L → mg/L
                 excel_vertimientos.at[idx[0], col_excel] = valor
 
         # Asegurar tipo float en columnas de calidad

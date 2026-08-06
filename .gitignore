@@ -40,8 +40,16 @@ webapp/static/collected/
 # Data de modelos (templates y resultados)
 data/
 
+# Documentacion generada
+docs/
+
 # Resultados de simulaciones / sensibilidad (output generado)
 resultados/
+
+# Archivos comprimidos
+*.rar
+*.zip
+*.7z
 
 # Excel lock files (temporales de Excel)
 ~$*.xlsx

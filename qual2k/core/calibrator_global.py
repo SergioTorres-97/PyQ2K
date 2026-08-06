@@ -43,10 +43,10 @@ MAPEO_COLUMNAS = {
     'conductivity':            'CONDUCTIVIDAD',
     'total_suspended_solids':  'SST',
     'dissolved_oxygen':        'OXIGENO_DISUELTO',
-    'carbonaceous_bod_fast':   'DBO5',
+    'dbo5_estimada':           'DBO5',
+    'dqo_calculada':           'DQO',
     'total_kjeldahl_nitrogen': 'NTK',
     'ammonium':                'NITROGENO_AMONIACAL',
-    'nitrite':                 'NITRITOS',
     'nitrate':                 'NITRATOS',
     'total_phosphorus':        'FOSFORO_TOTAL',
     'inorganic_phosphorus':    'ORTOFOSFATOS',
@@ -55,10 +55,6 @@ MAPEO_COLUMNAS = {
     'pH':                      'pH',
 }
 
-COLUMNAS_UG_A_MG = {
-    'total_kjeldahl_nitrogen', 'ammonium', 'nitrite',
-    'nitrate', 'total_phosphorus', 'inorganic_phosphorus',
-}
 
 PESOS_KGE_DEFAULT = {
     "water_temp_c":            0.05,
@@ -68,7 +64,8 @@ PESOS_KGE_DEFAULT = {
     "pH":                      0.05,
     "total_suspended_solids":  0.05,
     "dissolved_oxygen":        0.30,
-    "carbonaceous_bod_fast":   0.30,
+    "dbo5_estimada":           0.30,
+    "dqo_calculada":           0.00,
     "total_kjeldahl_nitrogen": 0.02,
     "ammonium":                0.02,
     "total_phosphorus":        0.01,
@@ -115,8 +112,6 @@ def _actualizar_vertimiento(
         for col_csv, col_excel in MAPEO_COLUMNAS.items():
             if col_csv in resultados.index and col_excel in sources.columns:
                 valor = resultados[col_csv] if pd.notna(resultados[col_csv]) else None
-                if valor is not None and col_csv in COLUMNAS_UG_A_MG:
-                    valor = valor / 1000.0
                 sources.at[idx[0], col_excel] = valor
         for col in MAPEO_COLUMNAS.values():
             if col in sources.columns:

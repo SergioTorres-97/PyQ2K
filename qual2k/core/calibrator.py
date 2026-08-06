@@ -38,6 +38,8 @@ class Calibracion:
             filepath: str,
             header_dict: Dict[str, Any],
             parametros: Dict[str, Tuple[float, float, bool]],
+            # Overrides fijos de rates_dict (p.ej. NINpmin, NIPpupmax)
+            rates_overrides: Optional[Dict[str, Any]] = None,
             # Parámetros básicos del GA
             num_generations: int = 100,
             population_size: int = 40,
@@ -125,6 +127,7 @@ class Calibracion:
         self.header_dict = header_dict
         self.parametros = parametros
         self.q_cabecera = q_cabecera
+        self.rates_overrides = rates_overrides or {}
 
         # Parámetros básicos del GA
         self.num_generations = num_generations
@@ -235,7 +238,7 @@ class Calibracion:
         Evalúa una solución en un worker paralelo.
         Esta función debe ser estática para ser serializable.
         """
-        solution, eval_id, filepath, header_dict, param_map, n_reaches, q_cabecera = args
+        solution, eval_id, filepath, header_dict, param_map, n_reaches, q_cabecera, rates_overrides = args
 
         temp_dir = tempfile.mkdtemp(prefix=f'q2k_eval_{eval_id}_')
 
@@ -260,6 +263,10 @@ class Calibracion:
 
             model = Q2KModel(temp_dir, header_dict_temp)
             model.cargar_plantillas('PlantillaBaseQ2K.xlsx')
+
+            # Aplicar overrides fijos de rates_dict
+            if rates_overrides:
+                model.config.actualizar_rates(**rates_overrides)
 
             # Decodificar parámetros
             params = {
@@ -306,7 +313,8 @@ class Calibracion:
                 "pH": 0.05,
                 "total_suspended_solids": 0.05,
                 "dissolved_oxygen": 0.30,
-                "carbonaceous_bod_fast": 0.30,
+                "dbo5_estimada": 0.30,
+                "dqo_calculada": 0.00,
                 "total_kjeldahl_nitrogen": 0.02,
                 "ammonium": 0.02,
                 "total_phosphorus": 0.01
@@ -330,7 +338,7 @@ class Calibracion:
         eval_id = self.contador_evaluaciones
 
         args = (solution, eval_id, self.filepath, self.header_dict,
-                self.param_map, self.n_reaches, self.q_cabecera)
+                self.param_map, self.n_reaches, self.q_cabecera, self.rates_overrides)
 
         if self.usar_paralelo and self.pool is not None:
             resultado = self.pool.apply_async(self._evaluar_solucion_worker, (args,))
@@ -839,6 +847,10 @@ class Calibracion:
         model_final = Q2KModel(self.filepath, self.header_dict)
         model_final.cargar_plantillas('PlantillaBaseQ2K.xlsx')
 
+        # Aplicar overrides fijos de rates_dict
+        if self.rates_overrides:
+            model_final.config.actualizar_rates(**self.rates_overrides)
+
         params_final = self._decodificar_solucion(solution)
 
         reach_rates_final = model_final.config.generar_reach_rates_custom(
@@ -866,7 +878,8 @@ class Calibracion:
                 "pH": 0.05,
                 "total_suspended_solids": 0.05,
                 "dissolved_oxygen": 0.30,
-                "carbonaceous_bod_fast": 0.30,
+                "dbo5_estimada": 0.30,
+                "dqo_calculada": 0.00,
                 "total_kjeldahl_nitrogen": 0.02,
                 "ammonium": 0.02,
                 "total_phosphorus": 0.01

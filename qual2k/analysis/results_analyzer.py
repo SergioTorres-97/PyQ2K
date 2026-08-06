@@ -3,6 +3,8 @@ import numpy as np
 import re
 from typing import Dict, Any, List, Tuple
 from qual2k.analysis import metricas
+from qual2k.constants import FACTOR_DBO5_A_CBODF, ROC
+from qual2k.analysis.ica import calcular_ica
 
 class Q2KResultsAnalyzer:
     """
@@ -153,7 +155,7 @@ class Q2KResultsAnalyzer:
             'DO': 'dissolved_oxygen',
             'CBODs': 'carbonaceous_bod_slow',
             'CBODf': 'carbonaceous_bod_fast',
-            'No': 'nitrite',
+            'No': 'organic_nitrogen',
             'NH4': 'ammonium',
             'NO3': 'nitrate',
             'PO': 'organic_phosphorus',
@@ -202,12 +204,21 @@ class Q2KResultsAnalyzer:
         wq = wq.rename(columns=wq_map)
         wq = wq[['Distancia Longitudinal (km)', 'conductivity',
                  'inorganic_suspended_solids', 'dissolved_oxygen',
-                 'carbonaceous_bod_slow', 'carbonaceous_bod_fast', 'nitrite',
+                 'carbonaceous_bod_slow', 'carbonaceous_bod_fast', 'organic_nitrogen',
                  'ammonium', 'nitrate', 'organic_phosphorus',
                  'inorganic_phosphorus', 'detritus', 'pathogen', 'alkalinity',
                  'const_i', 'const_ii', 'const_iii', 'pH', 'total_nitrogen',
                  'total_phosphorus', 'total_kjeldahl_nitrogen',
-                 'total_suspended_solids', 'ultimate_cbod', 'ammonia']]
+                 'total_suspended_solids', 'ultimate_cbod', 'ammonia',
+                 'do_saturation']]
+
+        # QUAL2K reporta N y P en µg/L; se convierten a mg/L para las salidas
+        cols_n_p_ug_a_mg = ['organic_nitrogen', 'ammonium', 'nitrate',
+                             'organic_phosphorus', 'inorganic_phosphorus',
+                             'total_nitrogen', 'total_phosphorus',
+                             'total_kjeldahl_nitrogen', 'ammonia']
+        wq[cols_n_p_ug_a_mg] = wq[cols_n_p_ug_a_mg] / 1000
+
         wq = wq.sort_values('Distancia Longitudinal (km)')
 
         # Merge final
@@ -215,6 +226,16 @@ class Q2KResultsAnalyzer:
         merged = merged.drop_duplicates(subset='Distancia Longitudinal (km)', keep='first')
         merged = pd.merge_asof(merged, hyd, on='Distancia Longitudinal (km)', direction='nearest')
         merged = merged.drop_duplicates(subset='Distancia Longitudinal (km)', keep='first')
+
+        merged['do_saturation_pct'] = merged['dissolved_oxygen'] / merged['do_saturation'] * 100
+
+        # DQO estimada a partir de las fracciones de CBOD simuladas
+        merged['dqo_calculada'] = (merged['carbonaceous_bod_fast'] + merged['carbonaceous_bod_slow']) / ROC
+        # DBO5 equivalente (para comparar contra el DBO5 observado, que no lleva el factor 1.27)
+        merged['dbo5_estimada'] = merged['carbonaceous_bod_fast'] / FACTOR_DBO5_A_CBODF
+
+        # Índice de Calidad del Agua (ICA, metodología IDEAM, 6 variables)
+        merged = calcular_ica(merged)
 
         return merged.sort_values('Distancia Longitudinal (km)', ascending=False).reset_index(drop=True)
 
@@ -242,7 +263,8 @@ class Q2KResultsAnalyzer:
             'pH': 'pH',
             'SST': 'total_suspended_solids',
             'OXIGENO_DISUELTO': 'dissolved_oxygen',
-            'DBO5': 'carbonaceous_bod_fast',
+            'DBO5': 'dbo5_estimada',
+            'DQO': 'dqo_calculada',
             'NTK': 'total_kjeldahl_nitrogen',
             'NITROGENO_AMONIACAL': 'ammonium',
             'FOSFORO_TOTAL': 'total_phosphorus',
@@ -262,7 +284,8 @@ class Q2KResultsAnalyzer:
             'pH',
             'total_suspended_solids',
             'dissolved_oxygen',
-            'carbonaceous_bod_fast',
+            'dbo5_estimada',
+            'dqo_calculada',
             'total_kjeldahl_nitrogen',
             'ammonium',
             'total_phosphorus'
@@ -271,12 +294,8 @@ class Q2KResultsAnalyzer:
         dataWQ.columns = [f'{dataWQ.columns[i]}_obs' for i in range(dataWQ.shape[1])]
         dataWQ = dataWQ.rename(columns={'Distancia Longitudinal (km)_obs': 'Distancia Longitudinal (km)'})
 
-        # Conversión mg/L → µg/L para N y P (QUAL2K opera en µg/L para estos)
-        cols_np = ['nitrate_obs', 'inorganic_phosphorus_obs',
-                   'total_kjeldahl_nitrogen_obs', 'ammonium_obs', 'total_phosphorus_obs']
-        for col in cols_np:
-            if col in dataWQ.columns:
-                dataWQ[col] = dataWQ[col] * 1000
+        # Los datos observados (WQ_DATA) ya vienen en mg/L, igual que las
+        # salidas simuladas de N y P — no requieren conversión de unidades.
 
         dataWQ = dataWQ.sort_values(by=['Distancia Longitudinal (km)'])
 

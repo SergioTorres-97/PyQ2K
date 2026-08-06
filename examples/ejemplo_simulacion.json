@@ -1,0 +1,218 @@
+{
+  "_comentario": "Ejemplo de simulación QUAL2K - Canal Vargas (27/06/2012)",
+
+  "header": {
+    "version":       "v2.12",
+    "rivname":       "Canal_vargas",
+    "filename":      "Canal_vargas_json",
+    "filedir":       "D:/Proyecto_UB_2025/PYQ2K/data/templates/Canal_vargas/Comprobacion",
+    "applabel":      "Canal_vargas (6/27/2012)",
+    "xmon":          6,
+    "xday":          27,
+    "xyear":         2012,
+    "timezonehour":  -6,
+    "pco2":          0.000347,
+    "dtuser":        0.00416666666666667,
+    "tf":            5,
+    "IMeth":         "Euler",
+    "IMethpH":       "Brent"
+  },
+
+  "simulacion": {
+    "q_cabecera":        2.3148e-06,
+    "estacion_cabecera": "CABECERA",
+    "numelem_default":   10
+  },
+
+  "reaches": [
+    {
+      "est_arriba":       "CABECERA",
+      "est_abajo":        "E1",
+      "nombre_tramo":     "Tramo 1",
+      "x_arriba":         0.0,
+      "x_abajo":          2.5,
+      "elev_arriba":      2610.0,
+      "elev_abajo":       2580.0,
+      "alpha_1":          0.3,
+      "beta_1":           0.4,
+      "alpha_2":          0.2,
+      "beta_2":           0.35,
+      "sombra":           0.0,
+      "temperatura_aire": 15.0,
+      "temperatura_rocio":10.0,
+      "velocidad_viento": 2.0,
+      "cobertura_nubes":  0.3
+    },
+    {
+      "est_arriba":       "E1",
+      "est_abajo":        "E2",
+      "nombre_tramo":     "Tramo 2",
+      "x_arriba":         2.5,
+      "x_abajo":          5.0,
+      "elev_arriba":      2580.0,
+      "elev_abajo":       2560.0,
+      "alpha_1":          0.3,
+      "beta_1":           0.4,
+      "alpha_2":          0.2,
+      "beta_2":           0.35,
+      "sombra":           0.0,
+      "temperatura_aire": 15.0,
+      "temperatura_rocio":10.0,
+      "velocidad_viento": 2.0,
+      "cobertura_nubes":  0.3
+    },
+    {
+      "est_arriba":       "E2",
+      "est_abajo":        "E3",
+      "nombre_tramo":     "Tramo 3",
+      "x_arriba":         5.0,
+      "x_abajo":          7.5,
+      "elev_arriba":      2560.0,
+      "elev_abajo":       2540.0,
+      "alpha_1":          0.3,
+      "beta_1":           0.4,
+      "alpha_2":          0.2,
+      "beta_2":           0.35,
+      "sombra":           0.0,
+      "temperatura_aire": 15.0,
+      "temperatura_rocio":10.0,
+      "velocidad_viento": 2.0,
+      "cobertura_nubes":  0.3
+    },
+    {
+      "est_arriba":       "E3",
+      "est_abajo":        "SALIDA",
+      "nombre_tramo":     "Tramo 4",
+      "x_arriba":         7.5,
+      "x_abajo":          10.0,
+      "elev_arriba":      2540.0,
+      "elev_abajo":       2520.0,
+      "alpha_1":          0.3,
+      "beta_1":           0.4,
+      "alpha_2":          0.2,
+      "beta_2":           0.35,
+      "sombra":           0.0,
+      "temperatura_aire": 15.0,
+      "temperatura_rocio":10.0,
+      "velocidad_viento": 2.0,
+      "cobertura_nubes":  0.3
+    }
+  ],
+
+  "sources": [
+    {
+      "_comentario":               "Vertimiento PTAR – tipo VERT",
+      "nombre":                    "PTAR_01",
+      "tipo":                      "VERT",
+      "x":                         3.2,
+      "caudal":                    0.05,
+      "temperatura":               18.0,
+      "conductividad":             450.0,
+      "sst":                       35.0,
+      "dbo5":                      120.0,
+      "ntk":                       25.0,
+      "nitrogeno_amoniacal":       18.0,
+      "nitritos":                  0.5,
+      "nitratos":                  1.5,
+      "fosforo_total":             5.0,
+      "ortofosfatos":              3.5,
+      "oxigeno_disuelto":          2.0,
+      "coliformes_totales":        1000000,
+      "alcalinidad":               150.0,
+      "coliformes_termotolerantes":500000,
+      "e_coli":                    200000,
+      "pH":                        7.2
+    }
+  ],
+
+  "wq_data": [
+    {
+      "_comentario":               "Condición de cabecera (obligatorio)",
+      "nombre_estacion":           "CABECERA",
+      "x":                         0.0,
+      "caudal":                    0.20,
+      "temperatura":               14.5,
+      "conductividad":             180.0,
+      "sst":                       5.0,
+      "dbo5":                      4.0,
+      "ntk":                       1.5,
+      "nitrogeno_amoniacal":       0.8,
+      "nitritos":                  0.05,
+      "nitratos":                  0.3,
+      "fosforo_total":             0.2,
+      "ortofosfatos":              0.12,
+      "oxigeno_disuelto":          7.5,
+      "coliformes_totales":        1000,
+      "alcalinidad":               80.0,
+      "coliformes_termotolerantes":500,
+      "e_coli":                    200,
+      "pH":                        7.8
+    },
+    {
+      "_comentario":               "Estación de monitoreo intermedia",
+      "nombre_estacion":           "E2",
+      "x":                         5.0,
+      "caudal":                    0.28,
+      "temperatura":               15.0,
+      "conductividad":             250.0,
+      "sst":                       12.0,
+      "dbo5":                      18.0,
+      "ntk":                       4.5,
+      "nitrogeno_amoniacal":       3.2,
+      "nitritos":                  0.2,
+      "nitratos":                  0.5,
+      "fosforo_total":             1.1,
+      "ortofosfatos":              0.7,
+      "oxigeno_disuelto":          5.2,
+      "coliformes_totales":        200000,
+      "alcalinidad":               100.0,
+      "coliformes_termotolerantes":100000,
+      "e_coli":                    50000,
+      "pH":                        7.4
+    },
+    {
+      "_comentario":               "Estación de cierre (salida)",
+      "nombre_estacion":           "SALIDA",
+      "x":                         10.0,
+      "caudal":                    0.30,
+      "temperatura":               15.5,
+      "conductividad":             280.0,
+      "sst":                       15.0,
+      "dbo5":                      22.0,
+      "ntk":                       5.0,
+      "nitrogeno_amoniacal":       3.8,
+      "nitritos":                  0.25,
+      "nitratos":                  0.6,
+      "fosforo_total":             1.3,
+      "ortofosfatos":              0.9,
+      "oxigeno_disuelto":          4.8,
+      "coliformes_totales":        300000,
+      "alcalinidad":               110.0,
+      "coliformes_termotolerantes":150000,
+      "e_coli":                    70000,
+      "pH":                        7.3
+    }
+  ],
+
+  "rates": {
+    "_comentario": "Solo incluir los parámetros que difieren de los defaults de Q2KConfig",
+    "kdc":   0.09,
+    "kn":    0.08,
+    "kpath": 0.8
+  },
+
+  "light": {
+    "_comentario": "Solo incluir los parámetros que difieren de los defaults",
+    "kep": 0.2,
+    "PAR": 0.47
+  },
+
+  "reach_rates": {
+    "_comentario": "Tasas por tramo calibradas. Puede ser lista [v1,v2,...] o escalar (se aplica a todos). null = usa el global.",
+    "kaaa":  [1.824655, 3.984011, 3.757785, 1.816685],
+    "kdc":   [1.307588, 0.181790, 0.075929, 0.313357],
+    "kn":    [0.004602, 0.001024, 0.001074, 0.004320],
+    "khp":   [0.836572, 1.234654, 0.649013, 0.630139],
+    "kdt":   [0.767967, 1.485570, 1.442998, 0.807965]
+  }
+}

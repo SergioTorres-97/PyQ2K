@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 from typing import Dict, Any
 
+from qual2k.constants import FACTOR_DBO5_A_CBODF, ROC
+
 
 class Q2KDataProcessor:
     """
@@ -15,8 +17,11 @@ class Q2KDataProcessor:
         df = df.copy()
         df['S_INORG'] = df['SST'] * 0.15       # 15% del SST es inorgánico
         df['DETRITUS'] = df['SST'] * 0.85      # 85% del SST es detritus
-        # DBO lenta desde DBO5 (sustrayendo la fracción rápida)
-        df['DBO_SLOW'] = df['DBO5'] / (1 - np.exp(-0.23 * 5)) - (1.46 * df['DBO5'])
+        # CBOD rápida desde DBO5
+        df['CBODF_CALC'] = FACTOR_DBO5_A_CBODF * df['DBO5']
+        # CBOD lenta desde DQO (roc*DQO - CBODf); físicamente no puede ser negativa
+        df['DBO_SLOW'] = ROC * df['DQO'] - df['CBODF_CALC']
+        df['DBO_SLOW'] = np.where(df['DBO_SLOW'] < 0, 0, df['DBO_SLOW'])
         # Conversión mg/L → µg/L para compuestos de N y P
         for col in ['NTK', 'NITROGENO_AMONIACAL', 'NITRITOS', 'NITRATOS', 'FOSFORO_TOTAL', 'ORTOFOSFATOS']:
             df[col] = df[col] * 1000
@@ -61,7 +66,7 @@ class Q2KDataProcessor:
             "S_INORG": "ISS",
             "OXIGENO_DISUELTO": "DO",
             "DBO_SLOW": "CBODs",
-            "DBO5": "CBODf",
+            "CBODF_CALC": "CBODf",
             "N_ORG": "Norg",
             "NITROGENO_AMONIACAL": "NH4",
             "NO3": "NO3",
@@ -198,7 +203,7 @@ class Q2KDataProcessor:
             [float(cal.get("S_INORG", 0))] * 24,
             [float(cal.get("OXIGENO_DISUELTO", 0))] * 24,
             [float(cal.get("DBO_SLOW", 0))] * 24,
-            [float(cal.get("DBO5", 0))] * 24,
+            [float(cal.get("CBODF_CALC", 0))] * 24,
             [float(cal.get("N_ORG", 0))] * 24,
             [float(cal.get("NITROGENO_AMONIACAL", 0))] * 24,
             [float(cal.get("NO3", 0))] * 24,
@@ -322,7 +327,7 @@ class Q2KDataProcessor:
             "S_INORG": "ISS",
             "OXIGENO_DISUELTO": "DO",
             "DBO_SLOW": "CBODs",
-            "DBO5": "CBODf",
+            "CBODF_CALC": "CBODf",
             "N_ORG": "Norg",
             "NITROGENO_AMONIACAL": "NH4",
             "NO3": "NO3",

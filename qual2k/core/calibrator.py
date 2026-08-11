@@ -7,6 +7,7 @@ import glob
 import shutil
 import tempfile
 import multiprocessing as mp
+from datetime import datetime
 from typing import Dict, List, Tuple, Optional, Any, Union
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -70,7 +71,12 @@ class Calibracion:
             num_workers: Optional[int] = None,
             usar_paralelo: bool = True,
             # Parámetros adicionales de Q2K
-            q_cabecera: float = 1.06007E-06
+            q_cabecera: float = 1.06007E-06,
+            # Persistencia incremental (logs y checkpoints por generación)
+            guardar_log_generaciones: bool = True,
+            log_filename: str = 'log_generaciones.txt',
+            historial_parcial_filename: str = 'historial_calibracion_parcial.csv',
+            checkpoint_filename: str = 'mejor_parcial.txt'
     ):
         """
         Inicializa la clase de calibración.
@@ -121,6 +127,14 @@ class Calibracion:
 
             # Parámetros adicionales de Q2K
             q_cabecera: Caudal de cabecera para el modelo
+
+            # Persistencia incremental
+            guardar_log_generaciones: Si guardar log TXT, historial CSV y checkpoint
+                                       de la mejor solución tras cada generación/mejora
+                                       (permite recuperar el progreso ante un corte/crash)
+            log_filename: Nombre del log de texto por generación
+            historial_parcial_filename: Nombre del CSV con el historial parcial
+            checkpoint_filename: Nombre del archivo con la mejor solución parcial
         """
         # Configuración del modelo
         self.filepath = filepath
@@ -176,8 +190,19 @@ class Calibracion:
         self.param_map = []
         self.ga_instance = None
         self.mejor_solucion = None
+        self.mejor_solucion_actual = None  # Mejor solución encontrada hasta el momento (se actualiza en vivo)
         self.historial_generaciones = []
         self.historial_poblacion = []  # Nuevo: guardar estadísticas de cada generación
+
+        # Persistencia incremental (para no perder progreso ante un corte/crash)
+        self.guardar_log_generaciones = guardar_log_generaciones
+        self.log_filename = log_filename
+        self.historial_parcial_filename = historial_parcial_filename
+        self.checkpoint_filename = checkpoint_filename
+        self.txt_log_path = None
+        self.csv_log_path = None
+        self.checkpoint_path = None
+        self._gen_actual = 0
 
     def _inicializar_modelo(self) -> Q2KModel:
         """Crea una instancia temporal del modelo para obtener configuración."""
@@ -348,7 +373,10 @@ class Calibracion:
 
         if kge > self.mejor_kge:
             self.mejor_kge = kge
+            self.mejor_solucion_actual = np.array(solution, copy=True)
             print(f"  *** Eval {eval_id} | NUEVO MEJOR KGE: {kge:.4f} ***")
+            # Checkpoint inmediato: no depende de que termine la generación
+            self._guardar_checkpoint(self._gen_actual)
         elif eval_id % 5 == 0:
             print(f"Eval {eval_id} | KGE: {kge:.4f}")
 
@@ -357,6 +385,7 @@ class Calibracion:
     def _on_generation(self, ga):
         """Callback ejecutado al completar cada generación."""
         gen = ga.generations_completed
+        self._gen_actual = gen
 
         # Obtener estadísticas de la población actual
         population_fitness = ga.last_generation_fitness
@@ -380,12 +409,101 @@ class Calibracion:
         self.historial_generaciones.append(stats)
         self.historial_poblacion.append(population_fitness.copy())
 
+        # Persistencia incremental: log de texto, historial CSV y checkpoint
+        best_idx = int(np.argmax(population_fitness))
+        best_solution_gen = ga.population[best_idx]
+        self._escribir_generacion_txt(gen, stats, best_solution_gen)
+        self._actualizar_historial_csv()
+        self._guardar_checkpoint(gen)
+
         print(f'\n{"=" * 60}')
         print(f'GENERACIÓN {gen} COMPLETADA')
         print(f'Mejor KGE de esta generación: {best_fitness:.4f}')
         print(f'Promedio poblacional: {stats["promedio"]:.4f} ± {stats["std"]:.4f}')
         print(f'Mejor KGE global: {self.mejor_kge:.4f}')
         print("=" * 60 + '\n')
+
+    def _escribir_generacion_txt(self, gen: int, stats: Dict, best_solution_gen) -> None:
+        """Agrega los resultados parciales de una generación al log TXT incremental."""
+        if not self.txt_log_path:
+            return
+
+        sep = '-' * 70
+
+        try:
+            with open(self.txt_log_path, 'a', encoding='utf-8') as f:
+                f.write(f'\n{"=" * 70}\n')
+                f.write(f'  GENERACIÓN {gen}\n')
+                f.write(f'{"=" * 70}\n')
+
+                f.write(f'  Mejor generación : {stats["mejor_fitness"]:>10.6f}\n')
+                f.write(f'  Mejor global     : {stats["mejor_global"]:>10.6f}\n')
+                f.write(f'  Promedio         : {stats["promedio"]:>10.6f} +/- {stats["std"]:.6f}\n')
+                f.write(f'  Mediana          : {stats["mediana"]:>10.6f}\n')
+                f.write(f'  Min / Max        : {stats["min"]:>10.6f} / {stats["max"]:.6f}\n')
+
+                f.write(f'\n  Mejores cinéticas de la generación {gen} (población actual):\n')
+                f.write(f'  {sep}\n')
+                f.write(f'  {"Parámetro":<10} {"Reach":>7}  {"Valor":>12}\n')
+                f.write(f'  {sep}\n')
+                for gene_val, (param_name, reach_idx) in zip(best_solution_gen, self.param_map):
+                    reach_str = str(reach_idx) if reach_idx is not None else 'global'
+                    f.write(f'  {param_name:<10} {reach_str:>7}  {gene_val:>12.6f}\n')
+                f.write(f'  {sep}\n')
+
+                if self.mejor_solucion_actual is not None:
+                    f.write(f'\n  Mejores cinéticas GLOBALES acumuladas (KGE={self.mejor_kge:.6f}):\n')
+                    f.write(f'  {sep}\n')
+                    for gene_val, (param_name, reach_idx) in zip(self.mejor_solucion_actual, self.param_map):
+                        reach_str = str(reach_idx) if reach_idx is not None else 'global'
+                        f.write(f'  {param_name:<10} {reach_str:>7}  {gene_val:>12.6f}\n')
+                    f.write(f'  {sep}\n')
+                f.write('\n')
+        except Exception as e:
+            print(f'Aviso: no se pudo actualizar el log de generación: {e}')
+
+    def _actualizar_historial_csv(self) -> None:
+        """Reescribe el CSV de historial parcial con lo acumulado hasta ahora."""
+        if not self.csv_log_path or not self.historial_generaciones:
+            return
+        try:
+            pd.DataFrame(self.historial_generaciones).to_csv(
+                self.csv_log_path, index=False, float_format='%.6f'
+            )
+        except Exception as e:
+            print(f'Aviso: no se pudo actualizar el historial parcial CSV: {e}')
+
+    def _guardar_checkpoint(self, gen: int) -> None:
+        """Guarda (sobrescribe) un checkpoint con la mejor solución encontrada hasta el momento."""
+        if not self.checkpoint_path or self.mejor_solucion_actual is None:
+            return
+        try:
+            with open(self.checkpoint_path, 'w', encoding='utf-8') as f:
+                f.write('=' * 80 + '\n')
+                f.write('MEJOR SOLUCIÓN PARCIAL (checkpoint incremental)\n')
+                f.write('=' * 80 + '\n\n')
+                f.write(f'Fecha actualización   : {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
+                f.write(f'Generación alcanzada  : {gen} / {self.num_generations}\n')
+                f.write(f'Evaluaciones totales  : {self.contador_evaluaciones}\n')
+                f.write(f'Mejor KGE (parcial)   : {self.mejor_kge:.6f}\n\n')
+
+                f.write('PARÁMETROS ÓPTIMOS (hasta esta generación):\n')
+                f.write('-' * 80 + '\n')
+
+                gene_idx = 0
+                for param_name, (min_val, max_val, is_global) in self.parametros.items():
+                    if is_global:
+                        valor = self.mejor_solucion_actual[gene_idx]
+                        f.write(f'{param_name:8s} (global):  {valor:.6f}\n')
+                        gene_idx += 1
+                    else:
+                        f.write(f'{param_name:8s} (por tramo):\n')
+                        for i in range(self.n_reaches):
+                            valor = self.mejor_solucion_actual[gene_idx]
+                            f.write(f'  Reach {i + 1}: {valor:.6f}\n')
+                            gene_idx += 1
+        except Exception as e:
+            print(f'Aviso: no se pudo guardar el checkpoint parcial: {e}')
 
     def plotear_evolucion_fitness(
             self,
@@ -773,7 +891,7 @@ class Calibracion:
                     gene_idx += 1
         print('=' * 80)
 
-    def _guardar_resultados(self, solution, kge_final):
+    def _guardar_resultados(self, solution, kge_final, interrumpida: bool = False):
         """Guarda los resultados en un archivo de texto."""
         output_file = os.path.join(self.filepath, 'parametros_calibrados.txt')
 
@@ -781,6 +899,10 @@ class Calibracion:
             f.write('=' * 80 + '\n')
             f.write('RESULTADOS DE CALIBRACIÓN - ALGORITMO GENÉTICO\n')
             f.write('=' * 80 + '\n\n')
+
+            if interrumpida:
+                f.write('*** CALIBRACIÓN INTERRUMPIDA: estos son los mejores parámetros\n')
+                f.write('*** encontrados hasta el corte (recuperados del checkpoint parcial). ***\n\n')
 
             # Resultados generales
             f.write('RESULTADOS GENERALES:\n')
@@ -904,6 +1026,28 @@ class Calibracion:
         self.n_reaches = len(model_temp.data_reaches)
         num_genes = self._configurar_genes()
 
+        # Preparar persistencia incremental (logs y checkpoints por generación)
+        if self.guardar_log_generaciones:
+            self.txt_log_path = os.path.join(self.filepath, self.log_filename)
+            self.csv_log_path = os.path.join(self.filepath, self.historial_parcial_filename)
+            self.checkpoint_path = os.path.join(self.filepath, self.checkpoint_filename)
+
+            with open(self.txt_log_path, 'w', encoding='utf-8') as f:
+                f.write('=' * 70 + '\n')
+                f.write('LOG DE CALIBRACIÓN POR GENERACIÓN\n')
+                f.write(f'Fecha            : {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n')
+                f.write(f'Generaciones     : {self.num_generations}\n')
+                f.write(f'Población        : {self.population_size}\n')
+                f.write(f'Padres mating    : {self.num_parents_mating}\n')
+                f.write(f'Mutación         : {self.mutation_type}  p={self.mutation_probability}\n')
+                f.write(f'Stop criteria    : {self.stop_criteria}\n')
+                f.write(f'Semilla          : {self.random_seed}\n')
+                f.write('=' * 70 + '\n')
+
+            print(f'\nLog incremental de generaciones: {self.txt_log_path}')
+            print(f'Historial parcial (CSV): {self.csv_log_path}')
+            print(f'Checkpoint mejor solución: {self.checkpoint_path}')
+
         self._imprimir_configuracion(num_genes)
 
         # Crear pool de workers
@@ -955,6 +1099,8 @@ class Calibracion:
         print('INICIANDO CALIBRACIÓN')
         print('=' * 80 + '\n')
 
+        interrumpida = False
+
         try:
             self.ga_instance.run()
 
@@ -968,6 +1114,15 @@ class Calibracion:
             print('\n\n¡CALIBRACIÓN INTERRUMPIDA POR USUARIO!\n')
             solution = None
             solution_fitness = None
+            interrumpida = True
+
+        except Exception as e:
+            import traceback
+            print(f'\n\n¡CALIBRACIÓN INTERRUMPIDA POR ERROR: {e}!\n')
+            traceback.print_exc()
+            solution = None
+            solution_fitness = None
+            interrumpida = True
 
         finally:
             # Cerrar pool
@@ -977,10 +1132,18 @@ class Calibracion:
                 self.pool.join()
                 print('Pool cerrado correctamente')
 
+        # Si se interrumpió (usuario o error), recuperar la mejor solución parcial
+        # ya guardada en el checkpoint incremental en lugar de perder el progreso.
+        if solution is None and self.mejor_solucion_actual is not None:
+            print('\nUsando la mejor solución parcial encontrada antes de la interrupción '
+                  f'(checkpoint: {self.checkpoint_path})...')
+            solution = self.mejor_solucion_actual
+            self.mejor_solucion = solution
+
         # Simulación final
         if solution is not None:
             kge_final = self._simular_con_mejor_solucion(solution)
-            self._guardar_resultados(solution, kge_final)
+            self._guardar_resultados(solution, kge_final, interrumpida=interrumpida)
 
             # Generar gráficas
             if generar_graficas:
